@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { useContext } from "react";
-
 import { AuthContext } from "../contexts/AuthContext";
 
 // Screens

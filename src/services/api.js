@@ -3,7 +3,7 @@ import axios from "axios";
 
 // Create axios instance
 const api = axios.create({
-  baseURL: "http://192.168.1.41:8000/api", // Make sure this matches your Laravel IP + port
+  baseURL: "https://daniele-cosmic-vapidly.ngrok-free.dev/api", // Make sure this matches your Laravel IP + port
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",

@@ -29,13 +29,13 @@ export default function LoginScreen({ navigation }) {
       const result = await login(email, password);
 
       if (!result.success) {
-        // Check for Laravel validation error
         const message =
           result.message || "Login failed. Check your email and password.";
         Alert.alert("Login Failed", message);
       } else {
-        // Login success, navigate to Student Dashboard or Home
-        navigation.replace("Home"); // Make sure you have a Home screen
+        // ✅ Login success, navigate to the main tab navigator
+        navigation.replace("MainTabs", { screen: "Home" });
+        console.log("Login successful, token stored:", result.token);
       }
     } catch (error) {
       Alert.alert("Error", "An unexpected error occurred. Please try again.");

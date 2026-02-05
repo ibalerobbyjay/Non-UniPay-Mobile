@@ -32,7 +32,12 @@ export const AuthProvider = ({ children }) => {
 
   async function login(email, password) {
     try {
+      console.log("Attempting login with:", email, password); // 🔹 log input
+
       const response = await api.post("/login", { email, password });
+
+      console.log("API response:", response.data); // 🔹 log API response
+
       const { access_token, user: userData } = response.data;
 
       setToken(access_token);
@@ -43,8 +48,12 @@ export const AuthProvider = ({ children }) => {
 
       api.defaults.headers.Authorization = `Bearer ${access_token}`;
 
+      console.log("Login successful, token stored:", access_token); // 🔹 log token
+
       return { success: true };
     } catch (error) {
+      console.log("Login error:", error.response?.data || error.message); // 🔹 log server error
+
       return {
         success: false,
         message: error.response?.data?.message || "Login failed",
@@ -54,6 +63,7 @@ export const AuthProvider = ({ children }) => {
 
   async function register(userData) {
     try {
+      console.log("Registering user:", userData); // 🔹 log registration data
       const response = await api.post("/register", userData);
       const { access_token, user: newUser } = response.data;
 
@@ -65,8 +75,11 @@ export const AuthProvider = ({ children }) => {
 
       api.defaults.headers.Authorization = `Bearer ${access_token}`;
 
+      console.log("Registration successful, token stored:", access_token); // 🔹 log token
+
       return { success: true };
     } catch (error) {
+      console.log("Registration error:", error.response?.data || error.message); // 🔹 log error
       return {
         success: false,
         message: error.response?.data?.message || "Registration failed",
