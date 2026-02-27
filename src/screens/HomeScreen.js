@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
 import api from "../services/api";
+import { useRoute } from "@react-navigation/native";
 
 export default function HomeScreen({ navigation }) {
   const { user } = useContext(AuthContext);
@@ -21,6 +22,16 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     loadData();
   }, []);
+
+  const route = useRoute();
+
+useEffect(() => {
+  if (route.params?.paymentSuccess) {
+    Alert.alert("Success", "Paid Successfully ✅");
+    loadData();
+    navigation.setParams({ paymentSuccess: false });
+  }
+}, [route.params?.paymentSuccess]);
 
   const loadData = async () => {
     try {

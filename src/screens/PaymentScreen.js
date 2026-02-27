@@ -154,16 +154,23 @@ if (parseFloat(amount) > totalFees) {
         console.log("⏳ Checking payment status:", res.data.status);
 
         const status = res.data.status;
+if (status === "paid") {
+  clearInterval(interval);
+  setCheckingStatus(false);
 
-        if (status === "paid") {
-          clearInterval(interval);
-          setCheckingStatus(false);
-          Alert.alert(
-            "Payment Successful! 🎉",
-            "Your payment has been processed.",
-            [{ text: "OK", onPress: () => navigation.goBack() }],
-          );
-        } else if (status === "failed") {
+  Alert.alert(
+    "Payment Successful! 🎉",
+    "Your payment has been processed.",
+    [
+      {
+        text: "OK",
+        onPress: () => {
+          navigation.navigate("Home", { paymentSuccess: true });
+        },
+      },
+    ],
+  );
+}else if (status === "failed") {
           clearInterval(interval);
           setCheckingStatus(false);
           Alert.alert(
