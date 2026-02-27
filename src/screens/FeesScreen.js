@@ -15,7 +15,9 @@ export default function FeesScreen() {
   const [breakdown, setBreakdown] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
+const totalDue = breakdown?.grand_total || 0;
+const totalPaid = breakdown?.total_paid || 0;
+const remainingBalance = breakdown?.remaining_balance ?? Math.max(totalDue - totalPaid, 0);
   useEffect(() => {
     loadFees();
   }, []);
@@ -64,10 +66,20 @@ export default function FeesScreen() {
 
       {/* Total Summary */}
       <View style={styles.summaryCard}>
-        <Text style={styles.summaryLabel}>Total Amount Due</Text>
-        <Text style={styles.summaryAmount}>
-          ₱{breakdown?.grand_total?.toLocaleString() || "0"}
-        </Text>
+        <Text style={styles.summaryLabel}>
+  {remainingBalance === 0 ? "Payment Status" : "Remaining Balance"}
+</Text>
+
+<Text
+  style={[
+    styles.summaryAmount,
+    { color: remainingBalance === 0 ? "green" : "#667eea" }
+  ]}
+>
+  {remainingBalance === 0
+    ? "Fully Paid ✅"
+    : `₱${remainingBalance.toLocaleString()}`}
+</Text>
       </View>
 
       {/* Tuition Fees */}

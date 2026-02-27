@@ -29,12 +29,19 @@ export default function PaymentScreen({ navigation }) {
   const loadTotalFees = async () => {
     try {
       console.log("📡 Fetching total fees...");
-      const response = await api.get("/fees/total");
+      const response = await api.get("/fees/breakdown");
 
-      console.log("✅ Fees response:", response.data);
+const breakdown = response.data.breakdown;
 
-      setTotalFees(response.data.total);
-      setAmount(response.data.total.toString());
+const totalDue = breakdown?.grand_total || 0;
+const totalPaid = breakdown?.total_paid || 0;
+const remainingBalance =
+  breakdown?.remaining_balance ?? Math.max(totalDue - totalPaid, 0);
+
+setTotalFees(remainingBalance);
+
+// auto-fill input with remaining balance
+setAmount(remainingBalance > 0 ? remainingBalance.toString() : "");
     } catch (error) {
       console.error("❌ Error loading fees:", {
         message: error.message,
@@ -56,6 +63,16 @@ export default function PaymentScreen({ navigation }) {
       Alert.alert("Error", "Please enter a valid amount");
       return;
     }
+
+    if (totalFees === 0) {
+  Alert.alert("Fully Paid", "You have no remaining balance.");
+  return;
+}
+
+if (parseFloat(amount) > totalFees) {
+  Alert.alert("Error", "Amount exceeds remaining balance.");
+  return;
+}
 
     if (parseFloat(amount) < 100) {
       Alert.alert("Error", "Minimum payment amount is ₱100");
@@ -182,9 +199,11 @@ export default function PaymentScreen({ navigation }) {
         </View>
 
         <Text style={styles.title}>Pay School Fees</Text>
-        <Text style={styles.subtitle}>
-          Total Fees: ₱{totalFees.toLocaleString()}
-        </Text>
+       <Text style={styles.subtitle}>
+  {totalFees === 0
+    ? "You are Fully Paid ✅"
+    : `Remaining Balance: ₱${totalFees.toLocaleString()}`}
+</Text>
 
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Amount to Pay</Text>

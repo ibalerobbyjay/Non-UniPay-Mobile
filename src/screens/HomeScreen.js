@@ -24,15 +24,23 @@ export default function HomeScreen({ navigation }) {
 
   const loadData = async () => {
     try {
-      const [profileRes, clearanceRes, feesRes] = await Promise.all([
-        api.get("/student/profile"),
-        api.get("/clearance"),
-        api.get("/fees/total"),
-      ]);
+     const [profileRes, clearanceRes, breakdownRes] = await Promise.all([
+  api.get("/student/profile"),
+  api.get("/clearance"),
+  api.get("/fees/breakdown"),
+]);
 
-      setProfile(profileRes.data);
-      setClearance(clearanceRes.data);
-      setTotalFees(feesRes.data.total);
+setProfile(profileRes.data);
+setClearance(clearanceRes.data);
+
+const breakdown = breakdownRes.data.breakdown;
+
+const totalDue = breakdown?.grand_total || 0;
+const totalPaid = breakdown?.total_paid || 0;
+const remainingBalance =
+  breakdown?.remaining_balance ?? Math.max(totalDue - totalPaid, 0);
+
+setTotalFees(remainingBalance);
     } catch (error) {
       console.error("Error loading data:", error);
     }
@@ -97,8 +105,10 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.actionInfo}>
             <Text style={styles.actionTitle}>View Fees</Text>
             <Text style={styles.actionSubtitle}>
-              Total: ₱{totalFees.toLocaleString()}
-            </Text>
+  {totalFees === 0
+    ? "Fully Paid ✅"
+    : `Remaining: ₱${totalFees.toLocaleString()}`}
+</Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#ccc" />
         </TouchableOpacity>
