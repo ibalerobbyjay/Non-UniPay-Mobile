@@ -22,21 +22,24 @@ const remainingBalance = breakdown?.remaining_balance ?? Math.max(totalDue - tot
     loadFees();
   }, []);
 
-  const loadFees = async () => {
-    try {
-      const [feesRes, breakdownRes] = await Promise.all([
-        api.get("/fees"),
-        api.get("/fees/breakdown"),
-      ]);
+ const loadFees = async () => {
+  try {
+    const [feesRes, breakdownRes] = await Promise.all([
+      api.get("/fees"),
+      api.get("/fees/breakdown"),
+    ]);
 
-      setFees(feesRes.data.fees);
-      setBreakdown(breakdownRes.data.breakdown);
-    } catch (error) {
-      console.error("Error loading fees:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    console.log("Fees response:", feesRes.data);
+    console.log("Breakdown response:", breakdownRes.data);
+
+    setFees(feesRes.data.fees);   // ← possible problem
+    setBreakdown(breakdownRes.data.breakdown);
+  } catch (error) {
+    console.error("Error loading fees:", error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const onRefresh = async () => {
     setRefreshing(true);

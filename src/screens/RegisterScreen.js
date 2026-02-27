@@ -17,16 +17,18 @@ import { AuthContext } from "../contexts/AuthContext";
 
 
 export default function RegisterScreen({ navigation }) {
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    password_confirmation: "",
-    student_no: "",
-    course: "",
-    year_level: "",
-    contact: "",
-  });
+const [formData, setFormData] = useState({
+  name: "",
+  email: "",
+  password: "",
+  password_confirmation: "",
+  student_no: "",
+  course: "",
+  year_level: "",
+  contact: "",
+  semester: "",
+  school_year: "",
+});
   const [loading, setLoading] = useState(false);
   const { register } = useContext(AuthContext);
 
@@ -35,6 +37,9 @@ const [yearModalVisible, setYearModalVisible] = useState(false);
 
 const courses = ["BSIT", "BSBA", "BSED", "BSCRIM"];
 const yearLevels = ["1", "2", "3", "4", "5"];
+const [semesterModalVisible, setSemesterModalVisible] = useState(false);
+const semesters = ["1st Semester", "2nd Semester"];
+
 
   const handleRegister = async () => {
     if (Object.values(formData).some((val) => !val)) {
@@ -128,6 +133,24 @@ const yearLevels = ["1", "2", "3", "4", "5"];
           keyboardType="phone-pad"
         />
 
+        <TouchableOpacity
+  style={styles.input}
+  onPress={() => setSemesterModalVisible(true)}
+>
+  <Text style={{ color: formData.semester ? "#000" : "#999" }}>
+    {formData.semester || "Select Semester"}
+  </Text>
+</TouchableOpacity>
+
+<TextInput
+  style={styles.input}
+  placeholder="School Year (e.g. 2025-2026)"
+  value={formData.school_year}
+  onChangeText={(text) =>
+    setFormData({ ...formData, school_year: text })
+  }
+/>
+
         <TextInput
           style={styles.input}
           placeholder="Password"
@@ -202,6 +225,27 @@ const yearLevels = ["1", "2", "3", "4", "5"];
             }}
           >
             <Text>{`Year ${item}`}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  </View>
+</Modal>
+<Modal visible={semesterModalVisible} transparent animationType="slide">
+  <View style={styles.modalContainer}>
+    <View style={styles.modalContent}>
+      <FlatList
+        data={semesters}
+        keyExtractor={(item) => item}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.modalItem}
+            onPress={() => {
+              setFormData({ ...formData, semester: item });
+              setSemesterModalVisible(false);
+            }}
+          >
+            <Text>{item}</Text>
           </TouchableOpacity>
         )}
       />
