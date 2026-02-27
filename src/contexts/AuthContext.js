@@ -61,32 +61,36 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  async function register(userData) {
-    try {
-      console.log("Registering user:", userData); // 🔹 log registration data
-      const response = await api.post("/register", userData);
-      const { access_token, user: newUser } = response.data;
+ async function register(userData) {
+  try {
+    console.log("Registering user:", userData);
 
-      setToken(access_token);
-      setUser(newUser);
+    const response = await api.post("/register", userData);
 
-      await AsyncStorage.setItem("@token", access_token);
-      await AsyncStorage.setItem("@user", JSON.stringify(newUser));
+    console.log("Registration response:", response.data);
 
-      api.defaults.headers.Authorization = `Bearer ${access_token}`;
+    // 🔥 DO NOT STORE TOKEN ANYMORE
+    // Registration is pending admin approval
 
-      console.log("Registration successful, token stored:", access_token); // 🔹 log token
+    return {
+      success: true,
+      message: response.data.message,
+    };
 
-      return { success: true };
-    } catch (error) {
-      console.log("Registration error:", error.response?.data || error.message); // 🔹 log error
-      return {
-        success: false,
-        message: error.response?.data?.message || "Registration failed",
-      };
-    }
+  } catch (error) {
+    console.log(
+      "Registration error:",
+      error.response?.data || error.message
+    );
+
+    return {
+      success: false,
+      message:
+        error.response?.data?.message ||
+        "Registration failed. Please try again.",
+    };
   }
-
+}
   async function logout() {
     try {
       await api.post("/logout");

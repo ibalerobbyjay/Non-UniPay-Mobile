@@ -8,8 +8,13 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+    KeyboardAvoidingView,
+  Platform,
+  Modal,
+  FlatList,
 } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
+
 
 export default function RegisterScreen({ navigation }) {
   const [formData, setFormData] = useState({
@@ -24,6 +29,12 @@ export default function RegisterScreen({ navigation }) {
   });
   const [loading, setLoading] = useState(false);
   const { register } = useContext(AuthContext);
+
+  const [courseModalVisible, setCourseModalVisible] = useState(false);
+const [yearModalVisible, setYearModalVisible] = useState(false);
+
+const courses = ["BSIT", "BSBA", "BSED", "BSCRIM"];
+const yearLevels = ["1", "2", "3", "4", "5"];
 
   const handleRegister = async () => {
     if (Object.values(formData).some((val) => !val)) {
@@ -43,13 +54,24 @@ export default function RegisterScreen({ navigation }) {
     });
     setLoading(false);
 
-    if (!result.success) {
-      Alert.alert("Registration Failed", result.message);
-    }
+    if (result.success) {
+  Alert.alert("Success", result.message);
+  navigation.navigate("Login");
+} else {
+  Alert.alert("Registration Failed", result.message);
+}
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <KeyboardAvoidingView
+  style={{ flex: 1 }}
+  behavior={Platform.OS === "ios" ? "padding" : "height"}
+>
+  <ScrollView
+    style={styles.container}
+    contentContainerStyle={{ flexGrow: 1 }}
+    keyboardShouldPersistTaps="handled"
+  >
       <View style={styles.content}>
         <Text style={styles.title}>Create Account</Text>
 
@@ -78,22 +100,25 @@ export default function RegisterScreen({ navigation }) {
           }
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Course"
-          value={formData.course}
-          onChangeText={(text) => setFormData({ ...formData, course: text })}
-        />
+        <TouchableOpacity
+  style={styles.input}
+  onPress={() => setCourseModalVisible(true)}
+>
+  <Text style={{ color: formData.course ? "#000" : "#999" }}>
+    {formData.course || "Select Course"}
+  </Text>
+</TouchableOpacity>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Year Level (1-5)"
-          value={formData.year_level}
-          onChangeText={(text) =>
-            setFormData({ ...formData, year_level: text })
-          }
-          keyboardType="number-pad"
-        />
+      <TouchableOpacity
+  style={styles.input}
+  onPress={() => setYearModalVisible(true)}
+>
+  <Text style={{ color: formData.year_level ? "#000" : "#999" }}>
+    {formData.year_level
+      ? `Year ${formData.year_level}`
+      : "Select Year Level"}
+  </Text>
+</TouchableOpacity>
 
         <TextInput
           style={styles.input}
@@ -140,7 +165,51 @@ export default function RegisterScreen({ navigation }) {
           <Text style={styles.linkText}>Already have an account? Login</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+
+      <Modal visible={courseModalVisible} transparent animationType="slide">
+  <View style={styles.modalContainer}>
+    <View style={styles.modalContent}>
+      <FlatList
+        data={courses}
+        keyExtractor={(item) => item}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.modalItem}
+            onPress={() => {
+              setFormData({ ...formData, course: item });
+              setCourseModalVisible(false);
+            }}
+          >
+            <Text>{item}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  </View>
+</Modal>
+<Modal visible={yearModalVisible} transparent animationType="slide">
+  <View style={styles.modalContainer}>
+    <View style={styles.modalContent}>
+      <FlatList
+        data={yearLevels}
+        keyExtractor={(item) => item}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.modalItem}
+            onPress={() => {
+              setFormData({ ...formData, year_level: item });
+              setYearModalVisible(false);
+            }}
+          >
+            <Text>{`Year ${item}`}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  </View>
+</Modal>
+      </ScrollView>
+</KeyboardAvoidingView>
   );
 }
 
@@ -188,4 +257,21 @@ const styles = StyleSheet.create({
     color: "#667eea",
     fontSize: 14,
   },
+  modalContainer: {
+  flex: 1,
+  justifyContent: "flex-end",
+  backgroundColor: "rgba(0,0,0,0.5)",
+},
+modalContent: {
+  backgroundColor: "#fff",
+  padding: 20,
+  borderTopLeftRadius: 20,
+  borderTopRightRadius: 20,
+  maxHeight: "50%",
+},
+modalItem: {
+  padding: 15,
+  borderBottomWidth: 1,
+  borderBottomColor: "#eee",
+},
 });
