@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
 import { useContext, useEffect, useState } from "react";
 import {
@@ -14,6 +15,10 @@ import {
 } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
 import api from "../services/api";
+
+// Predefined options
+const COURSES = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
+const YEAR_LEVELS = ["1", "2", "3", "4"];
 
 export default function ProfileScreen() {
   const { user, logout } = useContext(AuthContext);
@@ -64,7 +69,6 @@ export default function ProfileScreen() {
 
   // Image picker & upload
   const pickImage = async () => {
-    // Request permission
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -76,12 +80,13 @@ export default function ProfileScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"], // 👈 use array of strings
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
       base64: false,
     });
+
     if (!result.canceled && result.assets[0]) {
       uploadImage(result.assets[0].uri);
     }
@@ -99,9 +104,7 @@ export default function ProfileScreen() {
 
     try {
       const response = await api.post("/student/profile/picture", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
       if (response.data.success) {
@@ -167,6 +170,7 @@ export default function ProfileScreen() {
 
           {editing ? (
             <View>
+              {/* Contact Number */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Contact Number</Text>
                 <TextInput
@@ -179,27 +183,46 @@ export default function ProfileScreen() {
                 />
               </View>
 
+              {/* Course Picker */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Course</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.course}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, course: text })
-                  }
-                />
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={formData.course}
+                    onValueChange={(itemValue) =>
+                      setFormData({ ...formData, course: itemValue })
+                    }
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="Select Course" value="" />
+                    {COURSES.map((course) => (
+                      <Picker.Item key={course} label={course} value={course} />
+                    ))}
+                  </Picker>
+                </View>
               </View>
 
+              {/* Year Level Picker */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Year Level</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.year_level}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, year_level: text })
-                  }
-                  keyboardType="number-pad"
-                />
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={formData.year_level}
+                    onValueChange={(itemValue) =>
+                      setFormData({ ...formData, year_level: itemValue })
+                    }
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="Select Year" value="" />
+                    {YEAR_LEVELS.map((year) => (
+                      <Picker.Item
+                        key={year}
+                        label={`Year ${year}`}
+                        value={year}
+                      />
+                    ))}
+                  </Picker>
+                </View>
               </View>
 
               <View style={styles.buttonRow}>
@@ -373,6 +396,17 @@ const styles = StyleSheet.create({
     padding: 14,
     fontSize: 16,
     backgroundColor: "#f8fafc",
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    overflow: "hidden",
+  },
+  picker: {
+    height: 50,
+    width: "100%",
   },
   buttonRow: {
     flexDirection: "row",
