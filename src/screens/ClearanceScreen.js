@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import api from "../services/api";
 
@@ -45,7 +46,7 @@ export default function ClearanceScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#667eea" />
+        <ActivityIndicator size="large" color="#0f3c91" />
       </View>
     );
   }
@@ -56,22 +57,40 @@ export default function ClearanceScreen() {
     <ScrollView
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor="#0f3c91"
+        />
       }
     >
-      <View style={styles.header}>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={["#0f3c91", "#1a4da8"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
         <Text style={styles.headerTitle}>Exam Clearance</Text>
-      </View>
+      </LinearGradient>
 
+      {/* Status Card (overlaps header) */}
       <View
         style={[styles.statusCard, isCleared ? styles.cleared : styles.pending]}
       >
-        <Ionicons
-          name={isCleared ? "checkmark-circle" : "alert-circle"}
-          size={100}
-          color={isCleared ? "#4caf50" : "#ff9800"}
-        />
-        <Text style={styles.statusText}>
+        <View style={styles.statusIconContainer}>
+          <Ionicons
+            name={isCleared ? "checkmark-circle" : "alert-circle"}
+            size={80}
+            color={isCleared ? "#4caf50" : "rgb(244, 180, 20)"}
+          />
+        </View>
+        <Text
+          style={[
+            styles.statusText,
+            { color: isCleared ? "#4caf50" : "rgb(244, 180, 20)" },
+          ]}
+        >
           {isCleared ? "CLEARED" : "PENDING"}
         </Text>
         <Text style={styles.statusSubtext}>
@@ -81,6 +100,7 @@ export default function ClearanceScreen() {
         </Text>
       </View>
 
+      {/* Student Information Card */}
       <View style={styles.infoCard}>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Student Name:</Text>
@@ -106,9 +126,14 @@ export default function ClearanceScreen() {
         )}
       </View>
 
+      {/* Note for pending clearance */}
       {!isCleared && (
         <View style={styles.noteCard}>
-          <Ionicons name="information-circle" size={24} color="#ff9800" />
+          <Ionicons
+            name="information-circle"
+            size={28}
+            color="rgb(244, 180, 20)"
+          />
           <Text style={styles.noteText}>
             To get your clearance, please pay your school fees through the
             Payment section.
@@ -122,89 +147,120 @@ export default function ClearanceScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f0f2f5",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  header: {
-    backgroundColor: "#667eea",
-    padding: 20,
+  headerGradient: {
     paddingTop: 60,
+    paddingBottom: 30,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: "bold",
     color: "#fff",
+    marginBottom: 5,
   },
   statusCard: {
     backgroundColor: "#fff",
-    margin: 20,
-    padding: 40,
-    borderRadius: 15,
+    marginTop: -20,
+    marginHorizontal: 20,
+    padding: 25,
+    borderRadius: 25,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowColor: "#0f3c91",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 10,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.8)",
   },
   cleared: {
-    borderWidth: 3,
     borderColor: "#4caf50",
   },
   pending: {
-    borderWidth: 3,
-    borderColor: "#ff9800",
+    borderColor: "rgb(244, 180, 20)",
+  },
+  statusIconContainer: {
+    marginBottom: 15,
   },
   statusText: {
     fontSize: 32,
     fontWeight: "bold",
-    marginTop: 20,
+    marginBottom: 8,
   },
   statusSubtext: {
     fontSize: 16,
-    color: "#666",
+    color: "#64748b",
     textAlign: "center",
-    marginTop: 10,
+    lineHeight: 22,
   },
   infoCard: {
     backgroundColor: "#fff",
     marginHorizontal: 20,
-    marginBottom: 15,
+    marginTop: 20,
     padding: 20,
-    borderRadius: 10,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
   },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: "#f8f9fa",
   },
   infoLabel: {
-    fontSize: 16,
-    color: "#666",
+    fontSize: 15,
+    color: "#64748b",
+    fontWeight: "500",
   },
   infoValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
-    color: "#333",
+    color: "#1e293b",
   },
   noteCard: {
-    backgroundColor: "#fff3cd",
-    margin: 20,
-    padding: 15,
-    borderRadius: 10,
+    backgroundColor: "#fff3cd", // keep light yellow background
+    marginHorizontal: 20,
+    marginTop: 15,
+    marginBottom: 25,
+    padding: 16,
+    borderRadius: 20,
     flexDirection: "row",
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgb(244, 180, 20)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   noteText: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 12,
     fontSize: 14,
     color: "#856404",
+    fontWeight: "500",
+    lineHeight: 20,
   },
 });

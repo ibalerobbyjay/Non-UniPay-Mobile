@@ -34,14 +34,16 @@ export default function RegisterScreen({ navigation }) {
     school_year: "",
   });
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // 👈 new state
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false); // 👈 new state
   const { register } = useContext(AuthContext);
 
   const [courseModalVisible, setCourseModalVisible] = useState(false);
   const [yearModalVisible, setYearModalVisible] = useState(false);
   const [semesterModalVisible, setSemesterModalVisible] = useState(false);
 
-  const courses = ["BSIT", "BSBA", "BSED", "BSCRIM"];
-  const yearLevels = ["1", "2", "3", "4", "5"];
+  const courses = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
+  const yearLevels = ["1", "2", "3", "4"];
   const semesters = ["1st Semester", "2nd Semester"];
 
   const handleRegister = async () => {
@@ -229,7 +231,7 @@ export default function RegisterScreen({ navigation }) {
                 />
               </View>
 
-              {/* Password */}
+              {/* Password with eye icon */}
               <View style={styles.inputContainer}>
                 <Ionicons name="lock-closed-outline" size={20} color="#666" />
                 <TextInput
@@ -240,11 +242,21 @@ export default function RegisterScreen({ navigation }) {
                   onChangeText={(text) =>
                     setFormData({ ...formData, password: text })
                   }
-                  secureTextEntry
+                  secureTextEntry={!showPassword} // 👈 toggle
                 />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={22}
+                    color="#666"
+                  />
+                </TouchableOpacity>
               </View>
 
-              {/* Confirm Password */}
+              {/* Confirm Password with eye icon */}
               <View style={styles.inputContainer}>
                 <Ionicons name="lock-closed-outline" size={20} color="#666" />
                 <TextInput
@@ -255,8 +267,20 @@ export default function RegisterScreen({ navigation }) {
                   onChangeText={(text) =>
                     setFormData({ ...formData, password_confirmation: text })
                   }
-                  secureTextEntry
+                  secureTextEntry={!showConfirmPassword} // 👈 toggle
                 />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name={
+                      showConfirmPassword ? "eye-off-outline" : "eye-outline"
+                    }
+                    size={22}
+                    color="#666"
+                  />
+                </TouchableOpacity>
               </View>
             </View>
 
