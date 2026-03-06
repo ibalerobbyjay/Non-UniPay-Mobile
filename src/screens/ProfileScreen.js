@@ -1,14 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useContext, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
 import api from "../services/api";
@@ -23,6 +25,7 @@ export default function ProfileScreen() {
     year_level: "",
   });
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -33,9 +36,9 @@ export default function ProfileScreen() {
       const response = await api.get("/student/profile");
       setProfile(response.data);
       setFormData({
-        contact: response.data.contact,
-        course: response.data.course,
-        year_level: response.data.year_level.toString(),
+        contact: response.data.contact || "",
+        course: response.data.course || "",
+        year_level: response.data.year_level?.toString() || "",
       });
     } catch (error) {
       console.error("Error loading profile:", error);
@@ -47,7 +50,7 @@ export default function ProfileScreen() {
     try {
       await api.put("/student/profile", {
         ...formData,
-        year_level: parseInt(formData.year_level),
+        year_level: parseInt(formData.year_level) || 0,
       });
       Alert.alert("Success", "Profile updated successfully");
       setEditing(false);
@@ -56,6 +59,62 @@ export default function ProfileScreen() {
       Alert.alert("Error", "Failed to update profile");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Image picker & upload
+  const pickImage = async () => {
+    // Request permission
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Permission required",
+        "Please allow access to your photo library.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"], // 👈 use array of strings
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+      base64: false,
+    });
+    if (!result.canceled && result.assets[0]) {
+      uploadImage(result.assets[0].uri);
+    }
+  };
+
+  const uploadImage = async (uri) => {
+    setUploading(true);
+
+    const formData = new FormData();
+    formData.append("profile_picture", {
+      uri,
+      type: "image/jpeg",
+      name: "profile.jpg",
+    });
+
+    try {
+      const response = await api.post("/student/profile/picture", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      if (response.data.success) {
+        Alert.alert("Success", "Profile picture updated");
+        loadProfile();
+      } else {
+        Alert.alert("Error", response.data.message || "Upload failed");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      Alert.alert("Error", "Failed to upload image");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -69,9 +128,28 @@ export default function ProfileScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.avatarContainer}>
-          <Ionicons name="person-circle" size={100} color="#fff" />
-        </View>
+        <TouchableOpacity
+          onPress={pickImage}
+          style={styles.avatarContainer}
+          disabled={uploading}
+        >
+          {profile?.profile_picture ? (
+            <Image
+              source={{ uri: profile.profile_picture }}
+              style={styles.avatar}
+            />
+          ) : (
+            <Ionicons name="person-circle" size={100} color="#fff" />
+          )}
+          {uploading && (
+            <View style={styles.uploadOverlay}>
+              <ActivityIndicator color="#fff" />
+            </View>
+          )}
+          <View style={styles.editBadge}>
+            <Ionicons name="camera" size={20} color="#0f3c91" />
+          </View>
+        </TouchableOpacity>
         <Text style={styles.name}>{user?.name}</Text>
         <Text style={styles.email}>{user?.email}</Text>
       </View>
@@ -82,7 +160,7 @@ export default function ProfileScreen() {
             <Text style={styles.sectionTitle}>Student Information</Text>
             {!editing && (
               <TouchableOpacity onPress={() => setEditing(true)}>
-                <Ionicons name="create-outline" size={24} color="#667eea" />
+                <Ionicons name="create-outline" size={24} color="#0f3c91" />
               </TouchableOpacity>
             )}
           </View>
@@ -178,16 +256,55 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f0f2f5",
   },
   header: {
-    backgroundColor: "#667eea",
+    backgroundColor: "#0f3c91",
     paddingTop: 60,
     paddingBottom: 30,
     alignItems: "center",
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
   avatarContainer: {
     marginBottom: 15,
+    position: "relative",
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: "rgb(244, 180, 20)",
+  },
+  uploadOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 50,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  editBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: "rgb(244, 180, 20)",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   name: {
     fontSize: 24,
@@ -196,9 +313,8 @@ const styles = StyleSheet.create({
   },
   email: {
     fontSize: 16,
-    color: "#fff",
+    color: "rgba(255,255,255,0.9)",
     marginTop: 5,
-    opacity: 0.9,
   },
   content: {
     padding: 20,
@@ -206,8 +322,13 @@ const styles = StyleSheet.create({
   section: {
     backgroundColor: "#fff",
     padding: 20,
-    borderRadius: 10,
+    borderRadius: 20,
     marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -217,7 +338,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: "700",
+    color: "#0f3c91",
   },
   infoRow: {
     flexDirection: "row",
@@ -228,12 +350,12 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 16,
-    color: "#666",
+    color: "#64748b",
   },
   infoValue: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
+    color: "#1e293b",
   },
   inputGroup: {
     marginBottom: 15,
@@ -242,14 +364,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     marginBottom: 8,
-    color: "#666",
+    color: "#64748b",
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    padding: 14,
     fontSize: 16,
+    backgroundColor: "#f8fafc",
   },
   buttonRow: {
     flexDirection: "row",
@@ -258,19 +381,19 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    padding: 15,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 30,
     alignItems: "center",
     marginHorizontal: 5,
   },
   cancelButton: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f1f5f9",
   },
   saveButton: {
-    backgroundColor: "#667eea",
+    backgroundColor: "#0f3c91",
   },
   cancelButtonText: {
-    color: "#666",
+    color: "#475569",
     fontWeight: "600",
   },
   saveButtonText: {
@@ -282,10 +405,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 15,
-    borderRadius: 10,
+    padding: 16,
+    borderRadius: 30,
     borderWidth: 1,
     borderColor: "#f44336",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   logoutText: {
     color: "#f44336",

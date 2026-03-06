@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useContext, useEffect, useState } from "react";
 import {
   Alert,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -89,13 +90,23 @@ export default function HomeScreen({ navigation }) {
               {profile?.student_no || "Loading..."}
             </Text>
           </View>
-          <View style={styles.profileBadge}>
-            <Ionicons
-              name="person-circle"
-              size={50}
-              color="rgba(255,255,255,0.9)"
-            />
-          </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Profile")}
+            style={styles.profileBadge}
+          >
+            {profile?.profile_picture ? (
+              <Image
+                source={{ uri: profile.profile_picture }}
+                style={styles.profileImage}
+              />
+            ) : (
+              <Ionicons
+                name="person-circle"
+                size={50}
+                color="rgba(255,255,255,0.9)"
+              />
+            )}
+          </TouchableOpacity>
         </View>
       </LinearGradient>
 
@@ -202,7 +213,7 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f0f2f5", // soft neutral background
+    backgroundColor: "#f0f2f5",
   },
   headerGradient: {
     paddingTop: 60,
@@ -235,6 +246,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 35,
     padding: 5,
+  },
+  profileImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: "rgb(244, 180, 20)",
   },
   clearanceCard: {
     marginTop: -20,
