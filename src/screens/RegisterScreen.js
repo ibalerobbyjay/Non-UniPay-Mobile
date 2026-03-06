@@ -1,45 +1,48 @@
+import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { useContext, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    KeyboardAvoidingView,
-  Platform,
-  Modal,
+  ActivityIndicator,
+  Alert,
   FlatList,
+  Image,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
 
-
 export default function RegisterScreen({ navigation }) {
-const [formData, setFormData] = useState({
-  name: "",
-  email: "",
-  password: "",
-  password_confirmation: "",
-  student_no: "",
-  course: "",
-  year_level: "",
-  contact: "",
-  semester: "",
-  school_year: "",
-});
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    password_confirmation: "",
+    student_no: "",
+    course: "",
+    year_level: "",
+    contact: "",
+    semester: "",
+    school_year: "",
+  });
   const [loading, setLoading] = useState(false);
   const { register } = useContext(AuthContext);
 
   const [courseModalVisible, setCourseModalVisible] = useState(false);
-const [yearModalVisible, setYearModalVisible] = useState(false);
+  const [yearModalVisible, setYearModalVisible] = useState(false);
+  const [semesterModalVisible, setSemesterModalVisible] = useState(false);
 
-const courses = ["BSIT", "BSBA", "BSED", "BSCRIM"];
-const yearLevels = ["1", "2", "3", "4", "5"];
-const [semesterModalVisible, setSemesterModalVisible] = useState(false);
-const semesters = ["1st Semester", "2nd Semester"];
-
+  const courses = ["BSIT", "BSBA", "BSED", "BSCRIM"];
+  const yearLevels = ["1", "2", "3", "4", "5"];
+  const semesters = ["1st Semester", "2nd Semester"];
 
   const handleRegister = async () => {
     if (Object.values(formData).some((val) => !val)) {
@@ -60,262 +63,482 @@ const semesters = ["1st Semester", "2nd Semester"];
     setLoading(false);
 
     if (result.success) {
-  Alert.alert("Success", result.message);
-  navigation.navigate("Login");
-} else {
-  Alert.alert("Registration Failed", result.message);
-}
+      Alert.alert(
+        "Success",
+        "Registration successful! Please wait for approval.",
+        [{ text: "OK", onPress: () => navigation.navigate("Login") }],
+      );
+    } else {
+      Alert.alert("Registration Failed", result.message);
+    }
   };
 
   return (
     <KeyboardAvoidingView
-  style={{ flex: 1 }}
-  behavior={Platform.OS === "ios" ? "padding" : "height"}
->
-  <ScrollView
-    style={styles.container}
-    contentContainerStyle={{ flexGrow: 1 }}
-    keyboardShouldPersistTaps="handled"
-  >
-      <View style={styles.content}>
-        <Text style={styles.title}>Create Account</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Full Name"
-          value={formData.name}
-          onChangeText={(text) => setFormData({ ...formData, name: text })}
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={formData.email}
-          onChangeText={(text) => setFormData({ ...formData, email: text })}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Student Number"
-          value={formData.student_no}
-          onChangeText={(text) =>
-            setFormData({ ...formData, student_no: text })
-          }
-        />
-
-        <TouchableOpacity
-  style={styles.input}
-  onPress={() => setCourseModalVisible(true)}
->
-  <Text style={{ color: formData.course ? "#000" : "#999" }}>
-    {formData.course || "Select Course"}
-  </Text>
-</TouchableOpacity>
-
-      <TouchableOpacity
-  style={styles.input}
-  onPress={() => setYearModalVisible(true)}
->
-  <Text style={{ color: formData.year_level ? "#000" : "#999" }}>
-    {formData.year_level
-      ? `Year ${formData.year_level}`
-      : "Select Year Level"}
-  </Text>
-</TouchableOpacity>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Contact Number"
-          value={formData.contact}
-          onChangeText={(text) => setFormData({ ...formData, contact: text })}
-          keyboardType="phone-pad"
-        />
-
-        <TouchableOpacity
-  style={styles.input}
-  onPress={() => setSemesterModalVisible(true)}
->
-  <Text style={{ color: formData.semester ? "#000" : "#999" }}>
-    {formData.semester || "Select Semester"}
-  </Text>
-</TouchableOpacity>
-
-<TextInput
-  style={styles.input}
-  placeholder="School Year (e.g. 2025-2026)"
-  value={formData.school_year}
-  onChangeText={(text) =>
-    setFormData({ ...formData, school_year: text })
-  }
-/>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          value={formData.password}
-          onChangeText={(text) => setFormData({ ...formData, password: text })}
-          secureTextEntry
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Confirm Password"
-          value={formData.password_confirmation}
-          onChangeText={(text) =>
-            setFormData({ ...formData, password_confirmation: text })
-          }
-          secureTextEntry
-        />
-
-        <TouchableOpacity
-          style={styles.button}
-          onPress={handleRegister}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Register</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.linkButton}
-        >
-          <Text style={styles.linkText}>Already have an account? Login</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Modal visible={courseModalVisible} transparent animationType="slide">
-  <View style={styles.modalContainer}>
-    <View style={styles.modalContent}>
-      <FlatList
-        data={courses}
-        keyExtractor={(item) => item}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.modalItem}
-            onPress={() => {
-              setFormData({ ...formData, course: item });
-              setCourseModalVisible(false);
-            }}
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.container}>
+          {/* ===== TOP IMAGE ===== */}
+          <ImageBackground
+            source={require("../../assets/bg.jpg")}
+            style={styles.topSection}
+            resizeMode="cover"
           >
-            <Text>{item}</Text>
-          </TouchableOpacity>
-        )}
-      />
-    </View>
-  </View>
-</Modal>
-<Modal visible={yearModalVisible} transparent animationType="slide">
-  <View style={styles.modalContainer}>
-    <View style={styles.modalContent}>
-      <FlatList
-        data={yearLevels}
-        keyExtractor={(item) => item}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.modalItem}
-            onPress={() => {
-              setFormData({ ...formData, year_level: item });
-              setYearModalVisible(false);
-            }}
-          >
-            <Text>{`Year ${item}`}</Text>
-          </TouchableOpacity>
-        )}
-      />
-    </View>
-  </View>
-</Modal>
-<Modal visible={semesterModalVisible} transparent animationType="slide">
-  <View style={styles.modalContainer}>
-    <View style={styles.modalContent}>
-      <FlatList
-        data={semesters}
-        keyExtractor={(item) => item}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.modalItem}
-            onPress={() => {
-              setFormData({ ...formData, semester: item });
-              setSemesterModalVisible(false);
-            }}
-          >
-            <Text>{item}</Text>
-          </TouchableOpacity>
-        )}
-      />
-    </View>
-  </View>
-</Modal>
+            <BlurView intensity={30} style={StyleSheet.absoluteFill} />
+            <LinearGradient
+              colors={["rgba(0,0,0,0.3)", "rgba(0,0,0,0.6)"]}
+              style={StyleSheet.absoluteFill}
+            />
+          </ImageBackground>
+
+          {/* ===== GLASSY OVERLAPPING SECTION ===== */}
+          <BlurView intensity={50} tint="dark" style={styles.bottomSection}>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.description}>Join Non-UniPay System</Text>
+
+            <View style={styles.card}>
+              {/* Name */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={20} color="#666" />
+                <TextInput
+                  placeholder="Full Name"
+                  placeholderTextColor="#999"
+                  style={styles.input}
+                  value={formData.name}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, name: text })
+                  }
+                />
+              </View>
+
+              {/* Email */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="mail-outline" size={20} color="#666" />
+                <TextInput
+                  placeholder="Email"
+                  placeholderTextColor="#999"
+                  style={styles.input}
+                  value={formData.email}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, email: text })
+                  }
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
+
+              {/* Student Number */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="card-outline" size={20} color="#666" />
+                <TextInput
+                  placeholder="Student Number"
+                  placeholderTextColor="#999"
+                  style={styles.input}
+                  value={formData.student_no}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, student_no: text })
+                  }
+                />
+              </View>
+
+              {/* Course Picker */}
+              <TouchableOpacity
+                style={styles.inputContainer}
+                onPress={() => setCourseModalVisible(true)}
+              >
+                <Ionicons name="book-outline" size={20} color="#666" />
+                <Text
+                  style={[
+                    styles.input,
+                    { color: formData.course ? "#000" : "#999" },
+                  ]}
+                >
+                  {formData.course || "Select Course"}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#999" />
+              </TouchableOpacity>
+
+              {/* Year Level Picker */}
+              <TouchableOpacity
+                style={styles.inputContainer}
+                onPress={() => setYearModalVisible(true)}
+              >
+                <Ionicons name="school-outline" size={20} color="#666" />
+                <Text
+                  style={[
+                    styles.input,
+                    { color: formData.year_level ? "#000" : "#999" },
+                  ]}
+                >
+                  {formData.year_level
+                    ? `Year ${formData.year_level}`
+                    : "Select Year Level"}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#999" />
+              </TouchableOpacity>
+
+              {/* Contact */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="call-outline" size={20} color="#666" />
+                <TextInput
+                  placeholder="Contact Number"
+                  placeholderTextColor="#999"
+                  style={styles.input}
+                  value={formData.contact}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, contact: text })
+                  }
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              {/* Semester Picker */}
+              <TouchableOpacity
+                style={styles.inputContainer}
+                onPress={() => setSemesterModalVisible(true)}
+              >
+                <Ionicons name="calendar-outline" size={20} color="#666" />
+                <Text
+                  style={[
+                    styles.input,
+                    { color: formData.semester ? "#000" : "#999" },
+                  ]}
+                >
+                  {formData.semester || "Select Semester"}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#999" />
+              </TouchableOpacity>
+
+              {/* School Year */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="time-outline" size={20} color="#666" />
+                <TextInput
+                  placeholder="School Year (e.g. 2025-2026)"
+                  placeholderTextColor="#999"
+                  style={styles.input}
+                  value={formData.school_year}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, school_year: text })
+                  }
+                />
+              </View>
+
+              {/* Password */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={20} color="#666" />
+                <TextInput
+                  placeholder="Password"
+                  placeholderTextColor="#999"
+                  style={styles.input}
+                  value={formData.password}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, password: text })
+                  }
+                  secureTextEntry
+                />
+              </View>
+
+              {/* Confirm Password */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={20} color="#666" />
+                <TextInput
+                  placeholder="Confirm Password"
+                  placeholderTextColor="#999"
+                  style={styles.input}
+                  value={formData.password_confirmation}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, password_confirmation: text })
+                  }
+                  secureTextEntry
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.registerButton}
+              onPress={handleRegister}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.registerText}>Register</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={styles.loginText}>
+                Already have an account? Login
+              </Text>
+            </TouchableOpacity>
+          </BlurView>
+
+          {/* Logo */}
+          <View style={styles.logoWrapper}>
+            <Image
+              source={require("../../assets/logo.png")}
+              style={styles.logo}
+            />
+          </View>
+        </View>
+
+        {/* Course Modal */}
+        <Modal visible={courseModalVisible} transparent animationType="slide">
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Course</Text>
+                <TouchableOpacity onPress={() => setCourseModalVisible(false)}>
+                  <Ionicons name="close" size={28} color="#666" />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={courses}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setFormData({ ...formData, course: item });
+                      setCourseModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{item}</Text>
+                    {formData.course === item && (
+                      <Ionicons name="checkmark" size={24} color="#0f3c91" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </Modal>
+
+        {/* Year Level Modal */}
+        <Modal visible={yearModalVisible} transparent animationType="slide">
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Year Level</Text>
+                <TouchableOpacity onPress={() => setYearModalVisible(false)}>
+                  <Ionicons name="close" size={28} color="#666" />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={yearLevels}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setFormData({ ...formData, year_level: item });
+                      setYearModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{`Year ${item}`}</Text>
+                    {formData.year_level === item && (
+                      <Ionicons name="checkmark" size={24} color="#0f3c91" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </Modal>
+
+        {/* Semester Modal */}
+        <Modal visible={semesterModalVisible} transparent animationType="slide">
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Semester</Text>
+                <TouchableOpacity
+                  onPress={() => setSemesterModalVisible(false)}
+                >
+                  <Ionicons name="close" size={28} color="#666" />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={semesters}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setFormData({ ...formData, semester: item });
+                      setSemesterModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{item}</Text>
+                    {formData.semester === item && (
+                      <Ionicons name="checkmark" size={24} color="#0f3c91" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
-</KeyboardAvoidingView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    minHeight: 1000, // Ensure enough height for all fields
   },
-  content: {
-    padding: 20,
+
+  topSection: {
+    height: 220,
+    overflow: "hidden",
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 30,
-    marginTop: 40,
+
+  bottomSection: {
+    position: "absolute",
+    top: 160,
+    width: "100%",
+    minHeight: 900,
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+    padding: 25,
+    paddingTop: 80,
+    backgroundColor: "#ffffffec",
   },
-  input: {
+
+  logoWrapper: {
+    position: "absolute",
+    top: 100,
+    alignSelf: "center",
+    zIndex: 10,
+  },
+
+  logo: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    borderWidth: 4,
+    borderColor: "#fff",
     backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    fontSize: 16,
   },
-  button: {
-    backgroundColor: "#667eea",
+
+  title: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "#fff",
+    textAlign: "center",
+    marginBottom: 5,
+  },
+
+  description: {
+    fontSize: 13,
+    color: "#000000",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+
+  card: {
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 15,
+  },
+
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f2f2f2",
+    borderRadius: 25,
+    paddingHorizontal: 15,
+    marginBottom: 10,
+  },
+
+  input: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    fontSize: 15,
+  },
+
+  registerButton: {
+    backgroundColor: "#0f3c91",
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 25,
     alignItems: "center",
     marginTop: 10,
   },
-  buttonText: {
+
+  registerText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
   },
-  linkButton: {
+
+  loginButton: {
     marginTop: 15,
+    padding: 15,
+    borderRadius: 25,
     alignItems: "center",
-    marginBottom: 40,
+    backgroundColor: "transparent",
   },
-  linkText: {
-    color: "#667eea",
+
+  loginText: {
+    color: "#0f3c91",
     fontSize: 14,
+    fontWeight: "600",
   },
+
+  // Modal Styles
   modalContainer: {
-  flex: 1,
-  justifyContent: "flex-end",
-  backgroundColor: "rgba(0,0,0,0.5)",
-},
-modalContent: {
-  backgroundColor: "#fff",
-  padding: 20,
-  borderTopLeftRadius: 20,
-  borderTopRightRadius: 20,
-  maxHeight: "50%",
-},
-modalItem: {
-  padding: 15,
-  borderBottomWidth: 1,
-  borderBottomColor: "#eee",
-},
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+
+  modalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    paddingBottom: 30,
+    maxHeight: "60%",
+  },
+
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+  },
+
+  modalItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f5f5f5",
+  },
+
+  modalItemText: {
+    fontSize: 16,
+    color: "#333",
+  },
 });

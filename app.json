@@ -4,10 +4,11 @@
     "slug": "nonunipay-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/trinidad_logo.png",
+    "scheme": "nonunipay",
+    "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/trinidad_logo.png",
+      "image": "./assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#667eea"
     },
@@ -18,7 +19,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/trinidad_logo.png",
+        "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#667eea"
       },
       "package": "com.nonunipay.mobile"
@@ -26,10 +27,6 @@
     "web": {
       "favicon": "./assets/trinidad_logo.png"
     },
-
-    "expo": {
-      "name": "Non-UniPay",
-      "scheme": "nonunipay"
-    }
+    "plugins": ["expo-font"]
   }
 }
