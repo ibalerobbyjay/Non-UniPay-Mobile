@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRoute } from "@react-navigation/native";
+import { useFocusEffect, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useState } from "react";
 import {
   Alert,
   Image,
@@ -19,22 +19,26 @@ export default function HomeScreen({ navigation }) {
   const { user } = useContext(AuthContext);
   const [profile, setProfile] = useState(null);
   const [clearance, setClearance] = useState(null);
-  const [totalFees, setTotalFees] = useState(0);
+  const [breakdown, setBreakdown] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const route = useRoute();
 
-  useEffect(() => {
-    if (route.params?.paymentSuccess) {
-      Alert.alert("Success", "Paid Successfully ✅");
+  useFocusEffect(
+    useCallback(() => {
       loadData();
-      navigation.setParams({ paymentSuccess: false });
-    }
-  }, [route.params?.paymentSuccess]);
+    }, []),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.paymentSuccess) {
+        Alert.alert("Success", "Paid Successfully ✅");
+        loadData();
+        navigation.setParams({ paymentSuccess: false });
+      }
+    }, [route.params?.paymentSuccess]),
+  );
 
   const loadData = async () => {
     try {
@@ -46,14 +50,7 @@ export default function HomeScreen({ navigation }) {
 
       setProfile(profileRes.data);
       setClearance(clearanceRes.data);
-
-      const breakdown = breakdownRes.data.breakdown;
-      const totalDue = breakdown?.grand_total || 0;
-      const totalPaid = breakdown?.total_paid || 0;
-      const remainingBalance =
-        breakdown?.remaining_balance ?? Math.max(totalDue - totalPaid, 0);
-
-      setTotalFees(remainingBalance);
+      setBreakdown(breakdownRes.data.breakdown);
     } catch (error) {
       console.error("Error loading data:", error);
     }
@@ -64,6 +61,34 @@ export default function HomeScreen({ navigation }) {
     await loadData();
     setRefreshing(false);
   };
+
+  // Check if any fees exist
+  const hasFees =
+    [
+      ...(breakdown?.tuition?.fees || []),
+      ...(breakdown?.miscellaneous?.fees || []),
+      ...(breakdown?.exam?.fees || []),
+    ].length > 0;
+
+  const totalDue = breakdown?.grand_total || 0;
+  const totalPaid = breakdown?.total_paid || 0;
+  const remainingBalance = hasFees
+    ? (breakdown?.remaining_balance ?? Math.max(totalDue - totalPaid, 0))
+    : null;
+
+  let feeStatusText = "";
+  let feeStatusColor = "#64748b";
+
+  if (!hasFees) {
+    feeStatusText = "No fees available";
+    feeStatusColor = "#f97316";
+  } else if (remainingBalance === 0) {
+    feeStatusText = "Fully Paid";
+    feeStatusColor = "#4caf50";
+  } else {
+    feeStatusText = `Remaining: ₱${remainingBalance.toLocaleString()}`;
+    feeStatusColor = "#64748b";
+  }
 
   return (
     <ScrollView
@@ -115,30 +140,38 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.clearanceInner}>
           <Ionicons
             name={
-              clearance?.status === "cleared"
-                ? "checkmark-circle"
-                : "alert-circle"
+              !hasFees
+                ? "information-circle"
+                : clearance?.status === "cleared"
+                  ? "checkmark-circle"
+                  : "alert-circle"
             }
             size={48}
             color={
-              clearance?.status === "cleared" ? "#4caf50" : "rgb(244, 180, 20)"
+              !hasFees
+                ? "#64748b"
+                : clearance?.status === "cleared"
+                  ? "#4caf50"
+                  : "rgb(244, 180, 20)"
             }
           />
           <View style={styles.clearanceInfo}>
             <Text style={styles.clearanceTitle}>Exam Clearance</Text>
-            <Text
-              style={[
-                styles.clearanceStatus,
-                {
-                  color:
-                    clearance?.status === "cleared"
-                      ? "#4caf50"
-                      : "rgb(244, 180, 20)",
-                },
-              ]}
-            >
-              {clearance?.status === "cleared" ? "CLEARED" : "PENDING"}
-            </Text>
+            {hasFees && (
+              <Text
+                style={[
+                  styles.clearanceStatus,
+                  {
+                    color:
+                      clearance?.status === "cleared"
+                        ? "#4caf50"
+                        : "rgb(244, 180, 20)",
+                  },
+                ]}
+              >
+                {clearance?.status === "cleared" ? "CLEARED" : "PENDING"}
+              </Text>
+            )}
           </View>
         </View>
       </View>
@@ -157,15 +190,8 @@ export default function HomeScreen({ navigation }) {
           </View>
           <View style={styles.actionInfo}>
             <Text style={styles.actionTitle}>View Fees</Text>
-            <Text
-              style={[
-                styles.actionSubtitle,
-                totalFees === 0 && { color: "#4caf50", fontWeight: "600" },
-              ]}
-            >
-              {totalFees === 0
-                ? "Fully Paid"
-                : `Remaining: ₱${totalFees.toLocaleString()}`}
+            <Text style={[styles.actionSubtitle, { color: feeStatusColor }]}>
+              {feeStatusText}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#ccc" />
@@ -211,10 +237,7 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f0f2f5",
-  },
+  container: { flex: 1, backgroundColor: "#f0f2f5" },
   headerGradient: {
     paddingTop: 60,
     paddingBottom: 30,
@@ -333,7 +356,6 @@ const styles = StyleSheet.create({
   },
   actionSubtitle: {
     fontSize: 14,
-    color: "#64748b",
     marginTop: 3,
   },
 });

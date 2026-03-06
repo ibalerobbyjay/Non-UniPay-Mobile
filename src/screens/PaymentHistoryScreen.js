@@ -69,6 +69,11 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
                 <Text style={styles.receiptLabel}>Payment Method:</Text>
                 <Text style={styles.receiptValue}>{receiptData.method}</Text>
               </View>
+              {/* 👇 NEW ROW: Semester */}
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Semester:</Text>
+                <Text style={styles.receiptValue}>{receiptData.semester}</Text>
+              </View>
               <View style={styles.receiptRow}>
                 <Text style={styles.receiptLabel}>Amount:</Text>
                 <Text style={[styles.receiptValue, styles.receiptAmount]}>
@@ -158,6 +163,12 @@ export default function PaymentHistoryScreen() {
         payment.transaction?.reference_no ||
         `NUP-${payment.id}`;
 
+      // Extract semester from the first fee (assuming all fees in this payment are from the same semester)
+      const semester =
+        payment.fees && payment.fees.length > 0
+          ? payment.fees[0].semester
+          : "N/A";
+
       const receipt = {
         reference_no: referenceNo,
         date: new Date(
@@ -175,6 +186,7 @@ export default function PaymentHistoryScreen() {
           "GCash",
         amount: parseFloat(payment.total_amount),
         status: payment.status,
+        semester, // 👈 add semester
       };
       setSelectedReceipt(receipt);
       setReceiptVisible(true);
@@ -199,22 +211,19 @@ export default function PaymentHistoryScreen() {
     };
     const color = colors[statusKey] || colors.default;
 
-    // Convert color to rgba with 0.2 opacity for background
     const getBackgroundColor = (color) => {
       if (color.startsWith("#")) {
-        // Hex to rgba
         const r = parseInt(color.slice(1, 3), 16);
         const g = parseInt(color.slice(3, 5), 16);
         const b = parseInt(color.slice(5, 7), 16);
         return `rgba(${r}, ${g}, ${b}, 0.2)`;
       } else if (color.startsWith("rgb(")) {
-        // Extract numbers from rgb(...)
         const rgb = color.match(/\d+/g);
         if (rgb && rgb.length >= 3) {
           return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.2)`;
         }
       }
-      return color + "33"; // fallback hex opacity
+      return color + "33";
     };
 
     const backgroundColor = getBackgroundColor(color);
@@ -232,6 +241,7 @@ export default function PaymentHistoryScreen() {
       </View>
     );
   };
+
   const renderPayment = ({ item }) => {
     const displayReference =
       item.reference_no || item.transaction?.reference_no || `NUP-${item.id}`;
@@ -291,7 +301,6 @@ export default function PaymentHistoryScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Two‑column summary with gradient */}
       <LinearGradient
         colors={["#0f3c91", "#1a4da8"]}
         start={{ x: 0, y: 0 }}
@@ -356,10 +365,7 @@ export default function PaymentHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f0f2f5",
-  },
+  container: { flex: 1, backgroundColor: "#f0f2f5" },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -407,10 +413,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "rgba(255,255,255,0.7)",
   },
-  listContainer: {
-    padding: 16,
-    paddingTop: 8,
-  },
+  listContainer: { padding: 16, paddingTop: 8 },
   paymentCard: {
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -488,8 +491,6 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 20,
   },
-
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",

@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -14,22 +15,27 @@ import api from "../services/api";
 export default function ClearanceScreen() {
   const [clearance, setClearance] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [breakdown, setBreakdown] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, []),
+  );
 
   const loadData = async () => {
     try {
-      const [clearanceRes, profileRes] = await Promise.all([
+      const [clearanceRes, profileRes, breakdownRes] = await Promise.all([
         api.get("/clearance"),
         api.get("/student/profile"),
+        api.get("/fees/breakdown"),
       ]);
 
       setClearance(clearanceRes.data);
       setProfile(profileRes.data);
+      setBreakdown(breakdownRes.data.breakdown);
     } catch (error) {
       console.error("Error loading clearance:", error);
     } finally {
@@ -53,6 +59,41 @@ export default function ClearanceScreen() {
 
   const isCleared = clearance?.status === "cleared";
 
+  // Check if any fees exist
+  const hasFees =
+    [
+      ...(breakdown?.tuition?.fees || []),
+      ...(breakdown?.miscellaneous?.fees || []),
+      ...(breakdown?.exam?.fees || []),
+    ].length > 0;
+
+  // Determine card appearance based on fees existence and clearance status
+  let cardStyle = styles.statusCard;
+  let iconName = "help-circle";
+  let iconColor = "#94a3b8";
+  let statusText = "";
+  let statusMessage = "";
+
+  if (!hasFees) {
+    cardStyle = [styles.statusCard, styles.noFees];
+    iconName = "information-circle";
+    iconColor = "#64748b";
+    statusMessage =
+      "No fees are set for this semester. Please contact the administrator.";
+  } else if (isCleared) {
+    cardStyle = [styles.statusCard, styles.cleared];
+    iconName = "checkmark-circle";
+    iconColor = "#4caf50";
+    statusText = "CLEARED";
+    statusMessage = "You are cleared to take examinations";
+  } else {
+    cardStyle = [styles.statusCard, styles.pending];
+    iconName = "alert-circle";
+    iconColor = "rgb(244, 180, 20)";
+    statusText = "PENDING";
+    statusMessage = "Please settle your fees to get clearance";
+  }
+
   return (
     <ScrollView
       style={styles.container}
@@ -64,7 +105,6 @@ export default function ClearanceScreen() {
         />
       }
     >
-      {/* Gradient Header */}
       <LinearGradient
         colors={["#0f3c91", "#1a4da8"]}
         start={{ x: 0, y: 0 }}
@@ -74,33 +114,18 @@ export default function ClearanceScreen() {
         <Text style={styles.headerTitle}>Exam Clearance</Text>
       </LinearGradient>
 
-      {/* Status Card (overlaps header) */}
-      <View
-        style={[styles.statusCard, isCleared ? styles.cleared : styles.pending]}
-      >
+      <View style={cardStyle}>
         <View style={styles.statusIconContainer}>
-          <Ionicons
-            name={isCleared ? "checkmark-circle" : "alert-circle"}
-            size={80}
-            color={isCleared ? "#4caf50" : "rgb(244, 180, 20)"}
-          />
+          <Ionicons name={iconName} size={80} color={iconColor} />
         </View>
-        <Text
-          style={[
-            styles.statusText,
-            { color: isCleared ? "#4caf50" : "rgb(244, 180, 20)" },
-          ]}
-        >
-          {isCleared ? "CLEARED" : "PENDING"}
-        </Text>
-        <Text style={styles.statusSubtext}>
-          {isCleared
-            ? "You are cleared to take examinations"
-            : "Please settle your fees to get clearance"}
-        </Text>
+        {statusText ? (
+          <Text style={[styles.statusText, { color: iconColor }]}>
+            {statusText}
+          </Text>
+        ) : null}
+        <Text style={styles.statusSubtext}>{statusMessage}</Text>
       </View>
 
-      {/* Student Information Card */}
       <View style={styles.infoCard}>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Student Name:</Text>
@@ -126,8 +151,7 @@ export default function ClearanceScreen() {
         )}
       </View>
 
-      {/* Note for pending clearance */}
-      {!isCleared && (
+      {hasFees && !isCleared && (
         <View style={styles.noteCard}>
           <Ionicons
             name="information-circle"
@@ -145,10 +169,7 @@ export default function ClearanceScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f0f2f5",
-  },
+  container: { flex: 1, backgroundColor: "#f0f2f5" },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -187,15 +208,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.8)",
   },
-  cleared: {
-    borderColor: "#4caf50",
-  },
-  pending: {
-    borderColor: "rgb(244, 180, 20)",
-  },
-  statusIconContainer: {
-    marginBottom: 15,
-  },
+  cleared: { borderColor: "#4caf50" },
+  pending: { borderColor: "rgb(244, 180, 20)" },
+  noFees: { borderColor: "#94a3b8" },
+  statusIconContainer: { marginBottom: 15 },
   statusText: {
     fontSize: 32,
     fontWeight: "bold",
@@ -239,7 +255,7 @@ const styles = StyleSheet.create({
     color: "#1e293b",
   },
   noteCard: {
-    backgroundColor: "#fff3cd", // keep light yellow background
+    backgroundColor: "#fff3cd",
     marginHorizontal: 20,
     marginTop: 15,
     marginBottom: 25,

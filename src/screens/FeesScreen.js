@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -12,31 +13,19 @@ import {
 import api from "../services/api";
 
 export default function FeesScreen() {
-  const [fees, setFees] = useState([]);
   const [breakdown, setBreakdown] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const totalDue = breakdown?.grand_total || 0;
-  const totalPaid = breakdown?.total_paid || 0;
-  const remainingBalance =
-    breakdown?.remaining_balance ?? Math.max(totalDue - totalPaid, 0);
-
-  useEffect(() => {
-    loadFees();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadFees();
+    }, []),
+  );
 
   const loadFees = async () => {
     try {
-      const [feesRes, breakdownRes] = await Promise.all([
-        api.get("/fees"),
-        api.get("/fees/breakdown"),
-      ]);
-
-      console.log("Fees response:", feesRes.data);
-      console.log("Breakdown response:", breakdownRes.data);
-
-      setFees(feesRes.data.fees);
+      const breakdownRes = await api.get("/fees/breakdown");
       setBreakdown(breakdownRes.data.breakdown);
     } catch (error) {
       console.error("Error loading fees:", error);
@@ -57,6 +46,37 @@ export default function FeesScreen() {
         <ActivityIndicator size="large" color="#0f3c91" />
       </View>
     );
+  }
+
+  // Check if there are any fees
+  const hasFees =
+    [
+      ...(breakdown?.tuition?.fees || []),
+      ...(breakdown?.miscellaneous?.fees || []),
+      ...(breakdown?.exam?.fees || []),
+    ].length > 0;
+
+  const totalDue = breakdown?.grand_total || 0;
+  const totalPaid = breakdown?.total_paid || 0;
+  const remainingBalance =
+    breakdown?.remaining_balance ?? Math.max(totalDue - totalPaid, 0);
+
+  // Determine what to show in the summary card
+  let summaryLabel = "Remaining Balance";
+  let summaryAmount = `₱${remainingBalance.toLocaleString()}`;
+  let summaryIcon = "wallet-outline";
+  let summaryColor = "#0f3c91";
+
+  if (!hasFees) {
+    summaryLabel = "No Fees";
+    summaryAmount = "Not Available";
+    summaryIcon = "alert-circle-outline";
+    summaryColor = "#f97316"; // orange
+  } else if (remainingBalance === 0) {
+    summaryLabel = "Payment Status";
+    summaryAmount = "Fully Paid";
+    summaryIcon = "checkmark-circle";
+    summaryColor = "#4caf50";
   }
 
   return (
@@ -84,107 +104,112 @@ export default function FeesScreen() {
       {/* Summary Card */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryIconContainer}>
-          <Ionicons
-            name={
-              remainingBalance === 0 ? "checkmark-circle" : "wallet-outline"
-            }
-            size={40}
-            color={remainingBalance === 0 ? "#4caf50" : "#0f3c91"}
-          />
+          <Ionicons name={summaryIcon} size={40} color={summaryColor} />
         </View>
         <View style={styles.summaryTextContainer}>
-          <Text style={styles.summaryLabel}>
-            {remainingBalance === 0 ? "Payment Status" : "Remaining Balance"}
-          </Text>
-          <Text
-            style={[
-              styles.summaryAmount,
-              { color: remainingBalance === 0 ? "#4caf50" : "#0f3c91" },
-            ]}
-          >
-            {remainingBalance === 0
-              ? "Fully Paid"
-              : `₱${remainingBalance.toLocaleString()}`}
+          <Text style={styles.summaryLabel}>{summaryLabel}</Text>
+          <Text style={[styles.summaryAmount, { color: summaryColor }]}>
+            {summaryAmount}
           </Text>
         </View>
       </View>
 
       {/* Tuition Fees Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View style={[styles.iconCircle, { backgroundColor: "#0f3c91" }]}>
-            <Ionicons name="school-outline" size={22} color="#fff" />
+      {hasFees && breakdown?.tuition?.fees?.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={[styles.iconCircle, { backgroundColor: "#0f3c91" }]}>
+              <Ionicons name="school-outline" size={22} color="#fff" />
+            </View>
+            <Text style={styles.sectionTitle}>Tuition Fees</Text>
           </View>
-          <Text style={styles.sectionTitle}>Tuition Fees</Text>
-        </View>
-        {breakdown?.tuition?.fees.map((fee) => (
-          <View key={fee.id} style={styles.feeItem}>
-            <Text style={styles.feeName}>{fee.name}</Text>
-            <Text style={styles.feeAmount}>
-              ₱{parseFloat(fee.amount).toLocaleString()}
+          {breakdown.tuition.fees.map((fee) => (
+            <View key={fee.id} style={styles.feeItem}>
+              <Text style={styles.feeName}>{fee.name}</Text>
+              <Text style={styles.feeAmount}>
+                ₱{parseFloat(fee.amount).toLocaleString()}
+              </Text>
+            </View>
+          ))}
+          <View style={styles.subtotalRow}>
+            <Text style={styles.subtotalLabel}>Subtotal</Text>
+            <Text style={styles.subtotalAmount}>
+              ₱{breakdown.tuition.total?.toLocaleString() || "0"}
             </Text>
           </View>
-        ))}
-        <View style={styles.subtotalRow}>
-          <Text style={styles.subtotalLabel}>Subtotal</Text>
-          <Text style={styles.subtotalAmount}>
-            ₱{breakdown?.tuition?.total?.toLocaleString() || "0"}
-          </Text>
         </View>
-      </View>
+      )}
 
       {/* Miscellaneous Fees Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View
-            style={[
-              styles.iconCircle,
-              { backgroundColor: "rgb(244, 180, 20)" },
-            ]}
-          >
-            <Ionicons name="document-text-outline" size={22} color="#0f3c91" />
+      {hasFees && breakdown?.miscellaneous?.fees?.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View
+              style={[
+                styles.iconCircle,
+                { backgroundColor: "rgb(244, 180, 20)" },
+              ]}
+            >
+              <Ionicons
+                name="document-text-outline"
+                size={22}
+                color="#0f3c91"
+              />
+            </View>
+            <Text style={styles.sectionTitle}>Miscellaneous Fees</Text>
           </View>
-          <Text style={styles.sectionTitle}>Miscellaneous Fees</Text>
-        </View>
-        {breakdown?.miscellaneous?.fees.map((fee) => (
-          <View key={fee.id} style={styles.feeItem}>
-            <Text style={styles.feeName}>{fee.name}</Text>
-            <Text style={styles.feeAmount}>
-              ₱{parseFloat(fee.amount).toLocaleString()}
+          {breakdown.miscellaneous.fees.map((fee) => (
+            <View key={fee.id} style={styles.feeItem}>
+              <Text style={styles.feeName}>{fee.name}</Text>
+              <Text style={styles.feeAmount}>
+                ₱{parseFloat(fee.amount).toLocaleString()}
+              </Text>
+            </View>
+          ))}
+          <View style={styles.subtotalRow}>
+            <Text style={styles.subtotalLabel}>Subtotal</Text>
+            <Text style={styles.subtotalAmount}>
+              ₱{breakdown.miscellaneous.total?.toLocaleString() || "0"}
             </Text>
           </View>
-        ))}
-        <View style={styles.subtotalRow}>
-          <Text style={styles.subtotalLabel}>Subtotal</Text>
-          <Text style={styles.subtotalAmount}>
-            ₱{breakdown?.miscellaneous?.total?.toLocaleString() || "0"}
-          </Text>
         </View>
-      </View>
+      )}
 
       {/* Exam Fees Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View style={[styles.iconCircle, { backgroundColor: "#0f3c91" }]}>
-            <Ionicons name="create-outline" size={22} color="#fff" />
+      {hasFees && breakdown?.exam?.fees?.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={[styles.iconCircle, { backgroundColor: "#0f3c91" }]}>
+              <Ionicons name="create-outline" size={22} color="#fff" />
+            </View>
+            <Text style={styles.sectionTitle}>Exam Fees</Text>
           </View>
-          <Text style={styles.sectionTitle}>Exam Fees</Text>
-        </View>
-        {breakdown?.exam?.fees.map((fee) => (
-          <View key={fee.id} style={styles.feeItem}>
-            <Text style={styles.feeName}>{fee.name}</Text>
-            <Text style={styles.feeAmount}>
-              ₱{parseFloat(fee.amount).toLocaleString()}
+          {breakdown.exam.fees.map((fee) => (
+            <View key={fee.id} style={styles.feeItem}>
+              <Text style={styles.feeName}>{fee.name}</Text>
+              <Text style={styles.feeAmount}>
+                ₱{parseFloat(fee.amount).toLocaleString()}
+              </Text>
+            </View>
+          ))}
+          <View style={styles.subtotalRow}>
+            <Text style={styles.subtotalLabel}>Subtotal</Text>
+            <Text style={styles.subtotalAmount}>
+              ₱{breakdown.exam.total?.toLocaleString() || "0"}
             </Text>
           </View>
-        ))}
-        <View style={styles.subtotalRow}>
-          <Text style={styles.subtotalLabel}>Subtotal</Text>
-          <Text style={styles.subtotalAmount}>
-            ₱{breakdown?.exam?.total?.toLocaleString() || "0"}
+        </View>
+      )}
+
+      {/* If no fees at all, show a message */}
+      {!hasFees && (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="receipt-outline" size={60} color="#94a3b8" />
+          <Text style={styles.emptyText}>
+            No fees have been set for this semester.
           </Text>
         </View>
-      </View>
+      )}
     </ScrollView>
   );
 }
@@ -326,5 +351,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: "#0f3c91",
+  },
+  emptyContainer: {
+    alignItems: "center",
+    marginTop: 50,
+    marginBottom: 30,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#94a3b8",
+    marginTop: 12,
+    textAlign: "center",
   },
 });
