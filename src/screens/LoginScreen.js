@@ -154,9 +154,9 @@ export default function LoginScreen({ navigation }) {
                   style={styles.input}
                   value={password}
                   onChangeText={setPassword}
-                  secureTextEntry={!showPassword} // 👈 toggle
+                  secureTextEntry={!showPassword}
                 />
-                {/* 👇 Eye icon toggle */}
+
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: "bold",
-    color: "#fff",
+    color: "#0f3c91",
     textAlign: "center",
     marginBottom: 5,
   },
