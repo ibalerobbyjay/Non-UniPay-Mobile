@@ -9,6 +9,7 @@ import ClearanceScreen from "../screens/ClearanceScreen";
 import FeesScreen from "../screens/FeesScreen";
 import HomeScreen from "../screens/HomeScreen";
 import LoginScreen from "../screens/LoginScreen";
+import NotificationsScreen from "../screens/NotificationsScreen"; // already imported
 import PaymentHistoryScreen from "../screens/PaymentHistoryScreen";
 import PaymentScreen from "../screens/PaymentScreen";
 import ProfileScreen from "../screens/ProfileScreen";
@@ -67,6 +68,8 @@ export default function AppNavigator() {
             name="PaymentHistory"
             component={PaymentHistoryScreen}
           />
+          {/* Add Notifications screen here */}
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
         </>
       ) : (
         <>

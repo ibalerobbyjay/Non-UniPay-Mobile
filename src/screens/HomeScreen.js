@@ -20,6 +20,7 @@ export default function HomeScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
   const [clearance, setClearance] = useState(null);
   const [breakdown, setBreakdown] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
   const route = useRoute();
@@ -42,15 +43,18 @@ export default function HomeScreen({ navigation }) {
 
   const loadData = async () => {
     try {
-      const [profileRes, clearanceRes, breakdownRes] = await Promise.all([
-        api.get("/student/profile"),
-        api.get("/clearance"),
-        api.get("/fees/breakdown"),
-      ]);
+      const [profileRes, clearanceRes, breakdownRes, unreadRes] =
+        await Promise.all([
+          api.get("/student/profile"),
+          api.get("/clearance"),
+          api.get("/fees/breakdown"),
+          api.get("/notifications/unread-count"),
+        ]);
 
       setProfile(profileRes.data);
       setClearance(clearanceRes.data);
       setBreakdown(breakdownRes.data.breakdown);
+      setUnreadCount(unreadRes.data.count);
     } catch (error) {
       console.error("Error loading data:", error);
     }
@@ -101,7 +105,6 @@ export default function HomeScreen({ navigation }) {
         />
       }
     >
-      {/* Header with gradient */}
       <LinearGradient
         colors={["#0f3c91", "#1a4da8"]}
         start={{ x: 0, y: 0 }}
@@ -115,27 +118,41 @@ export default function HomeScreen({ navigation }) {
               {profile?.student_no || "Loading..."}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Profile")}
-            style={styles.profileBadge}
-          >
-            {profile?.profile_picture ? (
-              <Image
-                source={{ uri: profile.profile_picture }}
-                style={styles.profileImage}
-              />
-            ) : (
-              <Ionicons
-                name="person-circle"
-                size={50}
-                color="rgba(255,255,255,0.9)"
-              />
-            )}
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Notifications")}
+              style={styles.notificationBadge}
+            >
+              <Ionicons name="notifications-outline" size={28} color="white" />
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Profile")}
+              style={styles.profileBadge}
+            >
+              {profile?.profile_picture ? (
+                <Image
+                  source={{ uri: profile.profile_picture }}
+                  style={styles.profileImage}
+                />
+              ) : (
+                <Ionicons
+                  name="person-circle"
+                  size={50}
+                  color="rgba(255,255,255,0.9)"
+                />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </LinearGradient>
 
-      {/* Clearance Card */}
       <View style={styles.clearanceCard}>
         <View style={styles.clearanceInner}>
           <Ionicons
@@ -176,7 +193,6 @@ export default function HomeScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Quick Actions Section */}
       <View style={styles.quickActions}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
 
@@ -357,5 +373,31 @@ const styles = StyleSheet.create({
   actionSubtitle: {
     fontSize: 14,
     marginTop: 3,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  notificationBadge: {
+    marginRight: 15,
+    padding: 5,
+    position: "relative",
+  },
+  badge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    backgroundColor: "#ff3b30",
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "bold",
   },
 });
