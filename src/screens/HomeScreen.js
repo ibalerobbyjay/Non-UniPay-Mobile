@@ -110,7 +110,7 @@ export default function HomeScreen({ navigation }) {
       >
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.greeting}>Hello, {user?.name}!</Text>
+            <Text style={styles.greeting}>{user?.name}</Text>
             <Text style={styles.studentNo}>
               {profile?.student_no || "Loading..."}
             </Text>
