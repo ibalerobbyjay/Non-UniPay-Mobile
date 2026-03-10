@@ -10,6 +10,7 @@ import {
   FlatList,
   Modal,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -66,15 +67,8 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
               padding: 30px 20px;
               text-align: center;
             }
-            .header h1 {
-              font-size: 22px;
-              font-weight: bold;
-              margin-bottom: 5px;
-            }
-            .header p {
-              font-size: 13px;
-              opacity: 0.8;
-            }
+            .header h1 { font-size: 22px; font-weight: bold; margin-bottom: 5px; }
+            .header p { font-size: 13px; opacity: 0.8; }
             .badge {
               display: inline-block;
               margin-top: 12px;
@@ -82,17 +76,9 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
               border-radius: 20px;
               font-size: 13px;
               font-weight: bold;
-              background: ${
-                receiptData.status.toLowerCase() === "paid"
-                  ? "rgba(76,175,80,0.2)"
-                  : "rgba(244,180,20,0.2)"
-              };
+              background: ${receiptData.status.toLowerCase() === "paid" ? "rgba(76,175,80,0.2)" : "rgba(244,180,20,0.2)"};
               color: ${receiptData.status.toLowerCase() === "paid" ? "#4caf50" : "rgb(244,180,20)"};
-              border: 1px solid ${
-                receiptData.status.toLowerCase() === "paid"
-                  ? "#4caf50"
-                  : "rgb(244,180,20)"
-              };
+              border: 1px solid ${receiptData.status.toLowerCase() === "paid" ? "#4caf50" : "rgb(244,180,20)"};
             }
             .body { padding: 24px 20px; }
             .row {
@@ -103,22 +89,23 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
               border-bottom: 1px solid #f0f0f0;
             }
             .row:last-child { border-bottom: none; }
-            .label {
-              font-size: 14px;
-              color: #64748b;
-            }
-            .value {
-              font-size: 14px;
-              font-weight: 600;
-              color: #1e293b;
-              text-align: right;
-              max-width: 60%;
-            }
-            .amount {
-              font-size: 20px;
+            .label { font-size: 14px; color: #64748b; }
+            .value { font-size: 14px; font-weight: 600; color: #1e293b; text-align: right; max-width: 60%; }
+            .amount { font-size: 20px; color: #0f3c91; font-weight: bold; }
+            .section-title {
+              font-size: 13px;
+              font-weight: 700;
               color: #0f3c91;
-              font-weight: bold;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              padding: 14px 0 6px;
+              border-bottom: 2px solid #e2e8f0;
+              margin-bottom: 4px;
             }
+            .fee-row .label { color: #94a3b8; font-size: 13px; }
+            .fee-row .value { color: #64748b; font-size: 13px; }
+            .total-row { border-top: 2px solid #0f3c91 !important; margin-top: 4px; }
+            .total-label { font-weight: 700 !important; color: #0f3c91 !important; font-size: 15px !important; }
             .footer {
               background: #f8fafc;
               padding: 16px 20px;
@@ -153,8 +140,27 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
                 <span class="label">Semester</span>
                 <span class="value">${receiptData.semester}</span>
               </div>
-              <div class="row">
-                <span class="label">Amount</span>
+
+              ${
+                receiptData.fees && receiptData.fees.length > 0
+                  ? `
+                <div class="section-title">Fee Breakdown</div>
+                ${receiptData.fees
+                  .map(
+                    (fee) => `
+                  <div class="row fee-row">
+                    <span class="label">${fee.name || fee.fee_name || "Fee"}</span>
+                    <span class="value">₱${parseFloat(fee.amount).toLocaleString()}</span>
+                  </div>
+                `,
+                  )
+                  .join("")}
+              `
+                  : ""
+              }
+
+              <div class="row total-row">
+                <span class="label total-label">Total Amount</span>
                 <span class="value amount">₱${parseFloat(receiptData.amount).toLocaleString()}</span>
               </div>
             </div>
@@ -167,8 +173,6 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
       `;
 
       const { uri } = await Print.printToFileAsync({ html, base64: false });
-
-      // Move to a permanent location with a readable name
       const fileName = `receipt_${receiptData.reference_no}.pdf`;
       const newUri = `${FileSystem.documentDirectory}${fileName}`;
       await FileSystem.moveAsync({ from: uri, to: newUri });
@@ -215,7 +219,7 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
             </TouchableOpacity>
           </LinearGradient>
 
-          <View style={styles.modalBody}>
+          <ScrollView style={styles.modalBody}>
             <View style={styles.receiptCard}>
               <View style={styles.receiptRow}>
                 <Text style={styles.receiptLabel}>Reference No.:</Text>
@@ -254,6 +258,25 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
                   </Text>
                 </View>
               </View>
+
+              {/* Fee Breakdown */}
+              {receiptData.fees && receiptData.fees.length > 0 && (
+                <>
+                  <View style={styles.breakdownHeader}>
+                    <Text style={styles.breakdownTitle}>Fee Breakdown</Text>
+                  </View>
+                  {receiptData.fees.map((fee, index) => (
+                    <View key={index} style={styles.receiptRow}>
+                      <Text style={styles.breakdownLabel}>
+                        {fee.name || fee.fee_name || "Fee"}
+                      </Text>
+                      <Text style={styles.breakdownValue}>
+                        ₱{parseFloat(fee.amount).toLocaleString()}
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              )}
             </View>
 
             {/* Download Button */}
@@ -271,7 +294,7 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
                 </>
               )}
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -363,6 +386,7 @@ export default function PaymentHistoryScreen() {
       amount: parseFloat(payment.total_amount),
       status: payment.status,
       semester,
+      fees: payment.fees || [], // ✅ include fees
     };
     setSelectedReceipt(receipt);
     setReceiptVisible(true);
@@ -542,11 +566,7 @@ export default function PaymentHistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f0f2f5" },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   summaryCard: {
     paddingVertical: 20,
     paddingHorizontal: 16,
@@ -617,11 +637,7 @@ const styles = StyleSheet.create({
     borderTopColor: "#f0f0f0",
     paddingTop: 12,
   },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-  },
+  detailRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
   detailText: { fontSize: 14, color: "#64748b", marginLeft: 8 },
   viewReceiptBtn: {
     flexDirection: "row",
@@ -651,6 +667,7 @@ const styles = StyleSheet.create({
   modalContent: {
     width: "90%",
     maxWidth: 380,
+    maxHeight: "85%",
     backgroundColor: "#fff",
     borderRadius: 30,
     overflow: "hidden",
@@ -700,6 +717,20 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   receiptStatusText: { color: "#fff", fontWeight: "700", fontSize: 12 },
+  breakdownHeader: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  breakdownTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0f3c91",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  breakdownLabel: { fontSize: 14, color: "#94a3b8" },
+  breakdownValue: { fontSize: 14, fontWeight: "600", color: "#64748b" },
   downloadBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -708,11 +739,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 30,
     marginTop: 16,
+    marginBottom: 8,
     gap: 8,
   },
-  downloadBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
+  downloadBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
 });
