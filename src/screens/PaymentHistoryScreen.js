@@ -279,7 +279,6 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
               )}
             </View>
 
-            {/* Download Button */}
             <TouchableOpacity
               style={[styles.downloadBtn, downloading && { opacity: 0.7 }]}
               onPress={handleDownload}
@@ -302,7 +301,7 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
 };
 
 export default function PaymentHistoryScreen() {
-  const [payments, setPayments] = useState([]);
+  const [groupedPayments, setGroupedPayments] = useState([]);
   const [totalPaid, setTotalPaid] = useState(0);
   const [totalPending, setTotalPending] = useState(0);
   const [paidCount, setPaidCount] = useState(0);
@@ -320,7 +319,6 @@ export default function PaymentHistoryScreen() {
     try {
       const response = await api.get("/payments/history");
       const paymentsData = response.data.payments || [];
-      setPayments(paymentsData);
 
       let paidSum = 0;
       let pendingSum = 0;
@@ -343,6 +341,28 @@ export default function PaymentHistoryScreen() {
       setTotalPending(pendingSum);
       setPaidCount(paid);
       setPendingCount(pending);
+
+      // ✅ Group by semester + school year
+      const groups = {};
+      paymentsData.forEach((p) => {
+        let label = "Unknown Semester";
+        if (p.fees && p.fees.length > 0) {
+          const fee = p.fees[0];
+          const semName = fee.semester?.name || fee.semester || "Unknown";
+          const syName = fee.school_year?.name || fee.school_year || "";
+          label = syName ? `${semName} — ${syName}` : semName;
+        }
+        if (!groups[label]) groups[label] = [];
+        groups[label].push(p);
+      });
+
+      // Convert to array sorted by most recent first
+      const grouped = Object.entries(groups).map(([semester, items]) => ({
+        semester,
+        items,
+      }));
+
+      setGroupedPayments(grouped);
     } catch (error) {
       console.error("Error loading payments:", error);
     } finally {
@@ -362,10 +382,13 @@ export default function PaymentHistoryScreen() {
       payment.transaction?.reference_no ||
       `NUP-${payment.id}`;
 
-    const semester =
-      payment.fees && payment.fees.length > 0
-        ? payment.fees[0].semester
-        : "N/A";
+    let semesterLabel = "N/A";
+    if (payment.fees && payment.fees.length > 0) {
+      const fee = payment.fees[0];
+      const semName = fee.semester?.name || fee.semester || "Unknown";
+      const syName = fee.school_year?.name || fee.school_year || "";
+      semesterLabel = syName ? `${semName} — ${syName}` : semName;
+    }
 
     const receipt = {
       reference_no: referenceNo,
@@ -385,8 +408,8 @@ export default function PaymentHistoryScreen() {
         "GCash",
       amount: parseFloat(payment.total_amount),
       status: payment.status,
-      semester,
-      fees: payment.fees || [], // ✅ include fees
+      semester: semesterLabel,
+      fees: payment.fees || [],
     };
     setSelectedReceipt(receipt);
     setReceiptVisible(true);
@@ -408,19 +431,18 @@ export default function PaymentHistoryScreen() {
     };
     const color = colors[statusKey] || colors.default;
 
-    const getBackgroundColor = (color) => {
-      if (color.startsWith("#")) {
-        const r = parseInt(color.slice(1, 3), 16);
-        const g = parseInt(color.slice(3, 5), 16);
-        const b = parseInt(color.slice(5, 7), 16);
+    const getBackgroundColor = (c) => {
+      if (c.startsWith("#")) {
+        const r = parseInt(c.slice(1, 3), 16);
+        const g = parseInt(c.slice(3, 5), 16);
+        const b = parseInt(c.slice(5, 7), 16);
         return `rgba(${r}, ${g}, ${b}, 0.2)`;
-      } else if (color.startsWith("rgb(")) {
-        const rgb = color.match(/\d+/g);
-        if (rgb && rgb.length >= 3) {
+      } else if (c.startsWith("rgb(")) {
+        const rgb = c.match(/\d+/g);
+        if (rgb && rgb.length >= 3)
           return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.2)`;
-        }
       }
-      return color + "33";
+      return c + "33";
     };
 
     return (
@@ -442,12 +464,12 @@ export default function PaymentHistoryScreen() {
     );
   };
 
-  const renderPayment = ({ item }) => {
+  const renderPayment = (item) => {
     const displayReference =
       item.reference_no || item.transaction?.reference_no || `NUP-${item.id}`;
 
     return (
-      <View style={styles.paymentCard}>
+      <View key={item.id} style={styles.paymentCard}>
         <View style={styles.paymentHeader}>
           <StatusBadge status={item.status} />
           <Text style={styles.paymentAmount}>
@@ -491,6 +513,17 @@ export default function PaymentHistoryScreen() {
     );
   };
 
+  const renderGroup = ({ item }) => (
+    <View>
+      {/* ✅ Semester Header */}
+      <View style={styles.semesterHeader}>
+        <Ionicons name="school-outline" size={16} color="#0f3c91" />
+        <Text style={styles.semesterHeaderText}>{item.semester}</Text>
+      </View>
+      {item.items.map((payment) => renderPayment(payment))}
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -533,9 +566,9 @@ export default function PaymentHistoryScreen() {
       </LinearGradient>
 
       <FlatList
-        data={payments}
-        keyExtractor={(item, index) => item.id?.toString() || index.toString()}
-        renderItem={renderPayment}
+        data={groupedPayments}
+        keyExtractor={(item) => item.semester}
+        renderItem={renderGroup}
         contentContainerStyle={styles.listContainer}
         refreshControl={
           <RefreshControl
@@ -604,6 +637,24 @@ const styles = StyleSheet.create({
   },
   summarySubtext: { fontSize: 12, color: "rgba(255,255,255,0.7)" },
   listContainer: { padding: 16, paddingTop: 8 },
+  semesterHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(15, 60, 145, 0.08)",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 8,
+    marginTop: 8,
+    gap: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: "#0f3c91",
+  },
+  semesterHeaderText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0f3c91",
+  },
   paymentCard: {
     backgroundColor: "#fff",
     borderRadius: 20,
