@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,7 @@ import {
   View,
 } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
+import api from "../services/api";
 
 export default function RegisterScreen({ navigation }) {
   const [formData, setFormData] = useState({
@@ -34,17 +35,26 @@ export default function RegisterScreen({ navigation }) {
     school_year: "",
   });
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // 👈 new state
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false); // 👈 new state
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { register } = useContext(AuthContext);
 
   const [courseModalVisible, setCourseModalVisible] = useState(false);
   const [yearModalVisible, setYearModalVisible] = useState(false);
   const [semesterModalVisible, setSemesterModalVisible] = useState(false);
+  const [schoolYearModalVisible, setSchoolYearModalVisible] = useState(false);
+  const [schoolYears, setSchoolYears] = useState([]);
 
   const courses = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
   const yearLevels = ["1", "2", "3", "4"];
   const semesters = ["1st Semester", "2nd Semester"];
+
+  useEffect(() => {
+    api
+      .get("/school-years")
+      .then((res) => setSchoolYears(res.data.school_years || []))
+      .catch((err) => console.error("Failed to load school years:", err));
+  }, []);
 
   const handleRegister = async () => {
     if (Object.values(formData).some((val) => !val)) {
@@ -86,7 +96,7 @@ export default function RegisterScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          {/* ===== TOP IMAGE ===== */}
+          {/* TOP IMAGE */}
           <ImageBackground
             source={require("../../assets/bg.jpg")}
             style={styles.topSection}
@@ -99,7 +109,7 @@ export default function RegisterScreen({ navigation }) {
             />
           </ImageBackground>
 
-          {/* ===== GLASSY OVERLAPPING SECTION ===== */}
+          {/* GLASSY OVERLAPPING SECTION */}
           <BlurView intensity={50} tint="dark" style={styles.bottomSection}>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.description}>Join Non-UniPay System</Text>
@@ -217,21 +227,24 @@ export default function RegisterScreen({ navigation }) {
                 <Ionicons name="chevron-down" size={20} color="#999" />
               </TouchableOpacity>
 
-              {/* School Year */}
-              <View style={styles.inputContainer}>
+              {/* School Year Picker */}
+              <TouchableOpacity
+                style={styles.inputContainer}
+                onPress={() => setSchoolYearModalVisible(true)}
+              >
                 <Ionicons name="time-outline" size={20} color="#666" />
-                <TextInput
-                  placeholder="School Year (e.g. 2025-2026)"
-                  placeholderTextColor="#999"
-                  style={styles.input}
-                  value={formData.school_year}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, school_year: text })
-                  }
-                />
-              </View>
+                <Text
+                  style={[
+                    styles.input,
+                    { color: formData.school_year ? "#000" : "#999" },
+                  ]}
+                >
+                  {formData.school_year || "Select School Year"}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#999" />
+              </TouchableOpacity>
 
-              {/* Password with eye icon */}
+              {/* Password */}
               <View style={styles.inputContainer}>
                 <Ionicons name="lock-closed-outline" size={20} color="#666" />
                 <TextInput
@@ -242,7 +255,7 @@ export default function RegisterScreen({ navigation }) {
                   onChangeText={(text) =>
                     setFormData({ ...formData, password: text })
                   }
-                  secureTextEntry={!showPassword} // 👈 toggle
+                  secureTextEntry={!showPassword}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
@@ -256,7 +269,7 @@ export default function RegisterScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
 
-              {/* Confirm Password with eye icon */}
+              {/* Confirm Password */}
               <View style={styles.inputContainer}>
                 <Ionicons name="lock-closed-outline" size={20} color="#666" />
                 <TextInput
@@ -267,7 +280,7 @@ export default function RegisterScreen({ navigation }) {
                   onChangeText={(text) =>
                     setFormData({ ...formData, password_confirmation: text })
                   }
-                  secureTextEntry={!showConfirmPassword} // 👈 toggle
+                  secureTextEntry={!showConfirmPassword}
                 />
                 <TouchableOpacity
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -412,6 +425,51 @@ export default function RegisterScreen({ navigation }) {
             </View>
           </View>
         </Modal>
+
+        {/* School Year Modal */}
+        <Modal
+          visible={schoolYearModalVisible}
+          transparent
+          animationType="slide"
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select School Year</Text>
+                <TouchableOpacity
+                  onPress={() => setSchoolYearModalVisible(false)}
+                >
+                  <Ionicons name="close" size={28} color="#666" />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={schoolYears}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setFormData({ ...formData, school_year: item.name });
+                      setSchoolYearModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{item.name}</Text>
+                    {formData.school_year === item.name && (
+                      <Ionicons name="checkmark" size={24} color="#0f3c91" />
+                    )}
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <Text
+                    style={{ textAlign: "center", padding: 20, color: "#999" }}
+                  >
+                    No school years available
+                  </Text>
+                }
+              />
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -420,14 +478,12 @@ export default function RegisterScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    minHeight: 1000, // Ensure enough height for all fields
+    minHeight: 1000,
   },
-
   topSection: {
     height: 220,
     overflow: "hidden",
   },
-
   bottomSection: {
     position: "absolute",
     top: 160,
@@ -439,14 +495,12 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     backgroundColor: "#ffffffec",
   },
-
   logoWrapper: {
     position: "absolute",
     top: 100,
     alignSelf: "center",
     zIndex: 10,
   },
-
   logo: {
     width: 130,
     height: 130,
@@ -455,7 +509,6 @@ const styles = StyleSheet.create({
     borderColor: "#fff",
     backgroundColor: "#fff",
   },
-
   title: {
     fontSize: 32,
     fontWeight: "bold",
@@ -463,21 +516,18 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 5,
   },
-
   description: {
     fontSize: 13,
     color: "#000000",
     textAlign: "center",
     marginBottom: 20,
   },
-
   card: {
     backgroundColor: "rgba(255,255,255,0.9)",
     borderRadius: 20,
     padding: 20,
     marginBottom: 15,
   },
-
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -486,14 +536,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     marginBottom: 10,
   },
-
   input: {
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 10,
     fontSize: 15,
   },
-
   registerButton: {
     backgroundColor: "#0f3c91",
     padding: 15,
@@ -501,13 +549,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
-
   registerText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
   },
-
   loginButton: {
     marginTop: 15,
     padding: 15,
@@ -515,20 +561,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "transparent",
   },
-
   loginText: {
     color: "#0f3c91",
     fontSize: 14,
     fontWeight: "600",
   },
-
-  // Modal Styles
   modalContainer: {
     flex: 1,
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.5)",
   },
-
   modalContent: {
     backgroundColor: "#fff",
     borderTopLeftRadius: 25,
@@ -536,7 +578,6 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
     maxHeight: "60%",
   },
-
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -545,13 +586,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
   },
-
   modalTitle: {
     fontSize: 20,
     fontWeight: "bold",
     color: "#333",
   },
-
   modalItem: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -560,7 +599,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f5f5f5",
   },
-
   modalItemText: {
     fontSize: 16,
     color: "#333",

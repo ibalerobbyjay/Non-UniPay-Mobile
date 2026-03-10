@@ -61,36 +61,39 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
- async function register(userData) {
-  try {
-    console.log("Registering user:", userData);
+  async function register(userData) {
+    try {
+      console.log("Registering user:", userData);
 
-    const response = await api.post("/register", userData);
+      const response = await api.post("/register", userData);
 
-    console.log("Registration response:", response.data);
+      console.log("Registration response:", response.data);
 
-    // 🔥 DO NOT STORE TOKEN ANYMORE
-    // Registration is pending admin approval
+      return {
+        success: true,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.log("Registration error:", error.response?.data || error.message);
 
-    return {
-      success: true,
-      message: response.data.message,
-    };
+      // ✅ Handle Laravel validation errors (422)
+      if (error.response?.status === 422) {
+        const errors = error.response.data.errors;
+        const firstError = Object.values(errors)[0][0];
+        return {
+          success: false,
+          message: firstError,
+        };
+      }
 
-  } catch (error) {
-    console.log(
-      "Registration error:",
-      error.response?.data || error.message
-    );
-
-    return {
-      success: false,
-      message:
-        error.response?.data?.message ||
-        "Registration failed. Please try again.",
-    };
+      return {
+        success: false,
+        message:
+          error.response?.data?.message ||
+          "Registration failed. Please try again.",
+      };
+    }
   }
-}
   async function logout() {
     try {
       await api.post("/logout");
