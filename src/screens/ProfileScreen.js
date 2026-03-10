@@ -16,7 +16,6 @@ import {
 import { AuthContext } from "../contexts/AuthContext";
 import api from "../services/api";
 
-// Predefined options
 const COURSES = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
 const YEAR_LEVELS = ["1", "2", "3", "4"];
 
@@ -28,9 +27,13 @@ export default function ProfileScreen() {
     contact: "",
     course: "",
     year_level: "",
+    email: "",
   });
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [cooldownMessage, setCooldownMessage] = useState(null);
+  const [nextAllowed, setNextAllowed] = useState(null);
+  const [pictureCooldown, setPictureCooldown] = useState(null);
 
   useEffect(() => {
     loadProfile();
@@ -44,7 +47,40 @@ export default function ProfileScreen() {
         contact: response.data.contact || "",
         course: response.data.course || "",
         year_level: response.data.year_level?.toString() || "",
+        email: response.data.user?.email || user?.email || "",
       });
+
+      // 3-day profile info cooldown
+      if (response.data.last_profile_update) {
+        const last = new Date(response.data.last_profile_update);
+        const next = new Date(last);
+        next.setDate(next.getDate() + 3);
+        const now = new Date();
+        if (now < next) {
+          const daysLeft = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+          setCooldownMessage(
+            `You can edit your profile again in ${daysLeft} day(s).`,
+          );
+          setNextAllowed(next.toDateString());
+        } else {
+          setCooldownMessage(null);
+          setNextAllowed(null);
+        }
+      }
+
+      // 7-day profile picture cooldown
+      if (response.data.last_picture_update) {
+        const last = new Date(response.data.last_picture_update);
+        const next = new Date(last);
+        next.setDate(next.getDate() + 1);
+        const now = new Date();
+        if (now < next) {
+          const daysLeft = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+          setPictureCooldown(`Photo locked for ${daysLeft}  day.`);
+        } else {
+          setPictureCooldown(null);
+        }
+      }
     } catch (error) {
       console.error("Error loading profile:", error);
     }
@@ -57,18 +93,31 @@ export default function ProfileScreen() {
         ...formData,
         year_level: parseInt(formData.year_level) || 0,
       });
-      Alert.alert("Success", "Profile updated successfully");
+      Alert.alert("Success", "Profile updated successfully.");
       setEditing(false);
       loadProfile();
     } catch (error) {
-      Alert.alert("Error", "Failed to update profile");
+      if (error.response?.status === 429) {
+        Alert.alert("Too Soon", error.response.data.message);
+      } else if (error.response?.status === 422) {
+        const errors = error.response.data.errors;
+        const firstError = Object.values(errors)[0][0];
+        Alert.alert("Validation Error", firstError);
+      } else {
+        Alert.alert("Error", "Failed to update profile.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Image picker & upload
   const pickImage = async () => {
+    // Block if on cooldown
+    if (pictureCooldown) {
+      Alert.alert("Locked", pictureCooldown);
+      return;
+    }
+
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -94,28 +143,31 @@ export default function ProfileScreen() {
 
   const uploadImage = async (uri) => {
     setUploading(true);
-
-    const formData = new FormData();
-    formData.append("profile_picture", {
+    const form = new FormData();
+    form.append("profile_picture", {
       uri,
       type: "image/jpeg",
       name: "profile.jpg",
     });
 
     try {
-      const response = await api.post("/student/profile/picture", formData, {
+      const response = await api.post("/student/profile/picture", form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
       if (response.data.success) {
-        Alert.alert("Success", "Profile picture updated");
+        Alert.alert("Success", "Profile picture updated.");
         loadProfile();
       } else {
         Alert.alert("Error", response.data.message || "Upload failed");
       }
     } catch (error) {
-      console.error("Upload error:", error);
-      Alert.alert("Error", "Failed to upload image");
+      if (error.response?.status === 429) {
+        Alert.alert("Too Soon", error.response.data.message);
+      } else {
+        console.error("Upload error:", error);
+        Alert.alert("Error", "Failed to upload image.");
+      }
     } finally {
       setUploading(false);
     }
@@ -130,6 +182,7 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={pickImage}
@@ -149,28 +202,74 @@ export default function ProfileScreen() {
               <ActivityIndicator color="#fff" />
             </View>
           )}
-          <View style={styles.editBadge}>
-            <Ionicons name="camera" size={20} color="#0f3c91" />
+          {/* Lock or camera badge */}
+          <View
+            style={[
+              styles.editBadge,
+              pictureCooldown && { backgroundColor: "#94a3b8" },
+            ]}
+          >
+            <Ionicons
+              name={pictureCooldown ? "lock-closed" : "camera"}
+              size={20}
+              color="#fff"
+            />
           </View>
         </TouchableOpacity>
+
         <Text style={styles.name}>{user?.name}</Text>
-        <Text style={styles.email}>{user?.email}</Text>
+        <Text style={styles.email}>{formData.email || user?.email}</Text>
+
+        {/* Picture cooldown message */}
+        {pictureCooldown && (
+          <Text style={styles.pictureCooldownText}>{pictureCooldown}</Text>
+        )}
       </View>
 
       <View style={styles.content}>
         <View style={styles.section}>
+          {/* Section Header */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Student Information</Text>
-            {!editing && (
-              <TouchableOpacity onPress={() => setEditing(true)}>
-                <Ionicons name="create-outline" size={24} color="#0f3c91" />
-              </TouchableOpacity>
-            )}
+            {!editing &&
+              (cooldownMessage ? (
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={24}
+                  color="#94a3b8"
+                />
+              ) : (
+                <TouchableOpacity onPress={() => setEditing(true)}>
+                  <Ionicons name="create-outline" size={24} color="#0f3c91" />
+                </TouchableOpacity>
+              ))}
           </View>
+
+          {/* Profile info cooldown warning */}
+          {cooldownMessage && !editing && (
+            <View style={styles.cooldownBanner}>
+              <Ionicons name="time-outline" size={18} color="#b26a00" />
+              <Text style={styles.cooldownText}>{cooldownMessage}</Text>
+            </View>
+          )}
 
           {editing ? (
             <View>
-              {/* Contact Number */}
+              {/* Email */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.email}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, email: text })
+                  }
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
+
+              {/* Contact */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Contact Number</Text>
                 <TextInput
@@ -183,7 +282,7 @@ export default function ProfileScreen() {
                 />
               </View>
 
-              {/* Course Picker */}
+              {/* Course */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Course</Text>
                 <View style={styles.pickerContainer}>
@@ -202,7 +301,7 @@ export default function ProfileScreen() {
                 </View>
               </View>
 
-              {/* Year Level Picker */}
+              {/* Year Level */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Year Level</Text>
                 <View style={styles.pickerContainer}>
@@ -250,6 +349,12 @@ export default function ProfileScreen() {
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Student No:</Text>
                 <Text style={styles.infoValue}>{profile?.student_no}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Email:</Text>
+                <Text style={styles.infoValue}>
+                  {formData.email || user?.email}
+                </Text>
               </View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Course:</Text>
@@ -339,6 +444,12 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.9)",
     marginTop: 5,
   },
+  pictureCooldownText: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.6)",
+    marginTop: 6,
+    fontStyle: "italic",
+  },
   content: {
     padding: 20,
   },
@@ -363,6 +474,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: "#0f3c91",
+  },
+  cooldownBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(244,180,20,0.1)",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 15,
+    gap: 8,
+  },
+  cooldownText: {
+    color: "#b26a00",
+    fontSize: 13,
+    flex: 1,
   },
   infoRow: {
     flexDirection: "row",
