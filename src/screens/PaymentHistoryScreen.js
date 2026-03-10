@@ -1,5 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system/legacy";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,8 +17,9 @@ import {
 } from "react-native";
 import api from "../services/api";
 
-// Receipt Modal Component
 const ReceiptModal = ({ visible, onClose, receiptData }) => {
+  const [downloading, setDownloading] = useState(false);
+
   if (!receiptData) return null;
 
   const getStatusColor = (status) => {
@@ -27,6 +31,164 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
       default: "#666",
     };
     return colors[statusKey] || colors.default;
+  };
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              font-family: Arial, sans-serif;
+              background: #f0f2f5;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              padding: 20px;
+            }
+            .receipt {
+              background: white;
+              border-radius: 16px;
+              max-width: 400px;
+              width: 100%;
+              overflow: hidden;
+              box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            }
+            .header {
+              background: linear-gradient(135deg, #0f3c91, #1a4da8);
+              color: white;
+              padding: 30px 20px;
+              text-align: center;
+            }
+            .header h1 {
+              font-size: 22px;
+              font-weight: bold;
+              margin-bottom: 5px;
+            }
+            .header p {
+              font-size: 13px;
+              opacity: 0.8;
+            }
+            .badge {
+              display: inline-block;
+              margin-top: 12px;
+              padding: 6px 18px;
+              border-radius: 20px;
+              font-size: 13px;
+              font-weight: bold;
+              background: ${
+                receiptData.status.toLowerCase() === "paid"
+                  ? "rgba(76,175,80,0.2)"
+                  : "rgba(244,180,20,0.2)"
+              };
+              color: ${receiptData.status.toLowerCase() === "paid" ? "#4caf50" : "rgb(244,180,20)"};
+              border: 1px solid ${
+                receiptData.status.toLowerCase() === "paid"
+                  ? "#4caf50"
+                  : "rgb(244,180,20)"
+              };
+            }
+            .body { padding: 24px 20px; }
+            .row {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 14px 0;
+              border-bottom: 1px solid #f0f0f0;
+            }
+            .row:last-child { border-bottom: none; }
+            .label {
+              font-size: 14px;
+              color: #64748b;
+            }
+            .value {
+              font-size: 14px;
+              font-weight: 600;
+              color: #1e293b;
+              text-align: right;
+              max-width: 60%;
+            }
+            .amount {
+              font-size: 20px;
+              color: #0f3c91;
+              font-weight: bold;
+            }
+            .footer {
+              background: #f8fafc;
+              padding: 16px 20px;
+              text-align: center;
+              font-size: 12px;
+              color: #94a3b8;
+              border-top: 1px solid #e2e8f0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="receipt">
+            <div class="header">
+              <h1>Non-UniPay</h1>
+              <p>Official Payment Receipt</p>
+              <div class="badge">${receiptData.status.toUpperCase()}</div>
+            </div>
+            <div class="body">
+              <div class="row">
+                <span class="label">Reference No.</span>
+                <span class="value">${receiptData.reference_no}</span>
+              </div>
+              <div class="row">
+                <span class="label">Date & Time</span>
+                <span class="value">${receiptData.date}</span>
+              </div>
+              <div class="row">
+                <span class="label">Payment Method</span>
+                <span class="value">${receiptData.method}</span>
+              </div>
+              <div class="row">
+                <span class="label">Semester</span>
+                <span class="value">${receiptData.semester}</span>
+              </div>
+              <div class="row">
+                <span class="label">Amount</span>
+                <span class="value amount">₱${parseFloat(receiptData.amount).toLocaleString()}</span>
+              </div>
+            </div>
+            <div class="footer">
+              Thank you for your payment! • Non-UniPay System • ${new Date().getFullYear()}
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+
+      // Move to a permanent location with a readable name
+      const fileName = `receipt_${receiptData.reference_no}.pdf`;
+      const newUri = `${FileSystem.documentDirectory}${fileName}`;
+      await FileSystem.moveAsync({ from: uri, to: newUri });
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(newUri, {
+          mimeType: "application/pdf",
+          dialogTitle: "Save or Share Receipt",
+          UTI: "com.adobe.pdf",
+        });
+      } else {
+        Alert.alert("Saved", `Receipt saved to:\n${newUri}`);
+      }
+    } catch (error) {
+      console.error("Download error:", error);
+      Alert.alert("Error", "Failed to generate receipt PDF.");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -69,7 +231,6 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
                 <Text style={styles.receiptLabel}>Payment Method:</Text>
                 <Text style={styles.receiptValue}>{receiptData.method}</Text>
               </View>
-              {/* 👇 NEW ROW: Semester */}
               <View style={styles.receiptRow}>
                 <Text style={styles.receiptLabel}>Semester:</Text>
                 <Text style={styles.receiptValue}>{receiptData.semester}</Text>
@@ -77,7 +238,7 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
               <View style={styles.receiptRow}>
                 <Text style={styles.receiptLabel}>Amount:</Text>
                 <Text style={[styles.receiptValue, styles.receiptAmount]}>
-                  ₱{receiptData.amount.toLocaleString()}
+                  ₱{parseFloat(receiptData.amount).toLocaleString()}
                 </Text>
               </View>
               <View style={styles.receiptRow}>
@@ -94,6 +255,22 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
                 </View>
               </View>
             </View>
+
+            {/* Download Button */}
+            <TouchableOpacity
+              style={[styles.downloadBtn, downloading && { opacity: 0.7 }]}
+              onPress={handleDownload}
+              disabled={downloading}
+            >
+              {downloading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="download-outline" size={20} color="#fff" />
+                  <Text style={styles.downloadBtnText}>Download Receipt</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -156,43 +333,39 @@ export default function PaymentHistoryScreen() {
     setRefreshing(false);
   };
 
-  const handleViewReceipt = async (payment) => {
-    try {
-      const referenceNo =
-        payment.reference_no ||
-        payment.transaction?.reference_no ||
-        `NUP-${payment.id}`;
+  const handleViewReceipt = (payment) => {
+    const referenceNo =
+      payment.reference_no ||
+      payment.transaction?.reference_no ||
+      `NUP-${payment.id}`;
 
-      // Extract semester from the first fee (assuming all fees in this payment are from the same semester)
-      const semester =
-        payment.fees && payment.fees.length > 0
-          ? payment.fees[0].semester
-          : "N/A";
+    const semester =
+      payment.fees && payment.fees.length > 0
+        ? payment.fees[0].semester
+        : "N/A";
 
-      const receipt = {
-        reference_no: referenceNo,
-        date: new Date(
-          payment.payment_date || payment.created_at,
-        ).toLocaleString("en-US", {
+    const receipt = {
+      reference_no: referenceNo,
+      date: new Date(payment.payment_date || payment.created_at).toLocaleString(
+        "en-US",
+        {
           year: "numeric",
           month: "long",
           day: "numeric",
           hour: "2-digit",
           minute: "2-digit",
-        }),
-        method:
-          payment.payment_method ||
-          payment.transaction?.payment_method ||
-          "GCash",
-        amount: parseFloat(payment.total_amount),
-        status: payment.status,
-        semester, // 👈 add semester
-      };
-      setSelectedReceipt(receipt);
-      setReceiptVisible(true);
-    } catch (error) {
-      Alert.alert("Error", "Could not load receipt");
-    }
+        },
+      ),
+      method:
+        payment.payment_method ||
+        payment.transaction?.payment_method ||
+        "GCash",
+      amount: parseFloat(payment.total_amount),
+      status: payment.status,
+      semester,
+    };
+    setSelectedReceipt(receipt);
+    setReceiptVisible(true);
   };
 
   const StatusBadge = ({ status }) => {
@@ -226,10 +399,13 @@ export default function PaymentHistoryScreen() {
       return color + "33";
     };
 
-    const backgroundColor = getBackgroundColor(color);
-
     return (
-      <View style={[styles.statusBadge, { backgroundColor }]}>
+      <View
+        style={[
+          styles.statusBadge,
+          { backgroundColor: getBackgroundColor(color) },
+        ]}
+      >
         <Ionicons
           name={icons[statusKey] || icons.default}
           size={20}
@@ -387,10 +563,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     alignItems: "center",
   },
-  summaryColumn: {
-    flex: 1,
-    alignItems: "center",
-  },
+  summaryColumn: { flex: 1, alignItems: "center" },
   summaryDivider: {
     width: 1,
     height: "80%",
@@ -409,10 +582,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginBottom: 2,
   },
-  summarySubtext: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.7)",
-  },
+  summarySubtext: { fontSize: 12, color: "rgba(255,255,255,0.7)" },
   listContainer: { padding: 16, paddingTop: 8 },
   paymentCard: {
     backgroundColor: "#fff",
@@ -440,16 +610,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 20,
   },
-  statusText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    marginLeft: 5,
-  },
-  paymentAmount: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#0f3c91",
-  },
+  statusText: { fontSize: 12, fontWeight: "bold", marginLeft: 5 },
+  paymentAmount: { fontSize: 20, fontWeight: "bold", color: "#0f3c91" },
   paymentDetails: {
     borderTopWidth: 1,
     borderTopColor: "#f0f0f0",
@@ -460,11 +622,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 6,
   },
-  detailText: {
-    fontSize: 14,
-    color: "#64748b",
-    marginLeft: 8,
-  },
+  detailText: { fontSize: 14, color: "#64748b", marginLeft: 8 },
   viewReceiptBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -482,15 +640,8 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 15,
   },
-  emptyContainer: {
-    alignItems: "center",
-    marginTop: 100,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: "#999",
-    marginTop: 20,
-  },
+  emptyContainer: { alignItems: "center", marginTop: 100 },
+  emptyText: { fontSize: 18, color: "#999", marginTop: 20 },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -516,22 +667,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 18,
   },
-  modalHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  modalHeaderLeft: { flexDirection: "row", alignItems: "center" },
   modalTitle: {
     fontSize: 20,
     fontWeight: "700",
     color: "#fff",
     marginLeft: 10,
   },
-  modalClose: {
-    padding: 5,
-  },
-  modalBody: {
-    padding: 24,
-  },
+  modalClose: { padding: 5 },
+  modalBody: { padding: 24 },
   receiptCard: {
     backgroundColor: "#f8fafc",
     borderRadius: 20,
@@ -547,28 +691,28 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#e9ecef",
   },
-  receiptLabel: {
-    fontSize: 15,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  receiptValue: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#1e293b",
-  },
-  receiptAmount: {
-    fontSize: 18,
-    color: "#0f3c91",
-  },
+  receiptLabel: { fontSize: 15, color: "#64748b", fontWeight: "500" },
+  receiptValue: { fontSize: 15, fontWeight: "600", color: "#1e293b" },
+  receiptAmount: { fontSize: 18, color: "#0f3c91" },
   receiptStatusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 20,
   },
-  receiptStatusText: {
+  receiptStatusText: { color: "#fff", fontWeight: "700", fontSize: 12 },
+  downloadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0f3c91",
+    paddingVertical: 14,
+    borderRadius: 30,
+    marginTop: 16,
+    gap: 8,
+  },
+  downloadBtnText: {
     color: "#fff",
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: 16,
   },
 });
