@@ -41,18 +41,25 @@ export default function RegisterScreen({ navigation }) {
 
   const [courseModalVisible, setCourseModalVisible] = useState(false);
   const [yearModalVisible, setYearModalVisible] = useState(false);
-  const [semesterModalVisible, setSemesterModalVisible] = useState(false);
-  const [schoolYearModalVisible, setSchoolYearModalVisible] = useState(false);
-  const [schoolYears, setSchoolYears] = useState([]);
 
   const courses = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
   const yearLevels = ["1", "2", "3", "4"];
-  const semesters = ["1st Semester", "2nd Semester"];
 
   useEffect(() => {
     api
       .get("/school-years")
-      .then((res) => setSchoolYears(res.data.school_years || []))
+      .then((res) => {
+        const years = res.data.school_years || [];
+        const current = years.find((y) => y.is_current == 1) || null;
+        if (current) {
+          setFormData((prev) => ({ ...prev, school_year: current.name }));
+        }
+
+        const currentSemester = res.data.current_semester || null;
+        if (currentSemester) {
+          setFormData((prev) => ({ ...prev, semester: currentSemester.name }));
+        }
+      })
       .catch((err) => console.error("Failed to load school years:", err));
   }, []);
 
@@ -210,11 +217,8 @@ export default function RegisterScreen({ navigation }) {
                 />
               </View>
 
-              {/* Semester Picker */}
-              <TouchableOpacity
-                style={styles.inputContainer}
-                onPress={() => setSemesterModalVisible(true)}
-              >
+              {/* Semester (read-only, auto-filled) */}
+              <View style={[styles.inputContainer, { opacity: 0.7 }]}>
                 <Ionicons name="calendar-outline" size={20} color="#666" />
                 <Text
                   style={[
@@ -222,16 +226,13 @@ export default function RegisterScreen({ navigation }) {
                     { color: formData.semester ? "#000" : "#999" },
                   ]}
                 >
-                  {formData.semester || "Select Semester"}
+                  {formData.semester || "Loading semester..."}
                 </Text>
-                <Ionicons name="chevron-down" size={20} color="#999" />
-              </TouchableOpacity>
+                <Ionicons name="lock-closed-outline" size={16} color="#bbb" />
+              </View>
 
-              {/* School Year Picker */}
-              <TouchableOpacity
-                style={styles.inputContainer}
-                onPress={() => setSchoolYearModalVisible(true)}
-              >
+              {/* School Year (read-only, auto-filled) */}
+              <View style={[styles.inputContainer, { opacity: 0.7 }]}>
                 <Ionicons name="time-outline" size={20} color="#666" />
                 <Text
                   style={[
@@ -239,10 +240,10 @@ export default function RegisterScreen({ navigation }) {
                     { color: formData.school_year ? "#000" : "#999" },
                   ]}
                 >
-                  {formData.school_year || "Select School Year"}
+                  {formData.school_year || "Loading school year..."}
                 </Text>
-                <Ionicons name="chevron-down" size={20} color="#999" />
-              </TouchableOpacity>
+                <Ionicons name="lock-closed-outline" size={16} color="#bbb" />
+              </View>
 
               {/* Password */}
               <View style={styles.inputContainer}>
@@ -387,85 +388,6 @@ export default function RegisterScreen({ navigation }) {
                     )}
                   </TouchableOpacity>
                 )}
-              />
-            </View>
-          </View>
-        </Modal>
-
-        {/* Semester Modal */}
-        <Modal visible={semesterModalVisible} transparent animationType="slide">
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Semester</Text>
-                <TouchableOpacity
-                  onPress={() => setSemesterModalVisible(false)}
-                >
-                  <Ionicons name="close" size={28} color="#666" />
-                </TouchableOpacity>
-              </View>
-              <FlatList
-                data={semesters}
-                keyExtractor={(item) => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.modalItem}
-                    onPress={() => {
-                      setFormData({ ...formData, semester: item });
-                      setSemesterModalVisible(false);
-                    }}
-                  >
-                    <Text style={styles.modalItemText}>{item}</Text>
-                    {formData.semester === item && (
-                      <Ionicons name="checkmark" size={24} color="#0f3c91" />
-                    )}
-                  </TouchableOpacity>
-                )}
-              />
-            </View>
-          </View>
-        </Modal>
-
-        {/* School Year Modal */}
-        <Modal
-          visible={schoolYearModalVisible}
-          transparent
-          animationType="slide"
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select School Year</Text>
-                <TouchableOpacity
-                  onPress={() => setSchoolYearModalVisible(false)}
-                >
-                  <Ionicons name="close" size={28} color="#666" />
-                </TouchableOpacity>
-              </View>
-              <FlatList
-                data={schoolYears}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.modalItem}
-                    onPress={() => {
-                      setFormData({ ...formData, school_year: item.name });
-                      setSchoolYearModalVisible(false);
-                    }}
-                  >
-                    <Text style={styles.modalItemText}>{item.name}</Text>
-                    {formData.school_year === item.name && (
-                      <Ionicons name="checkmark" size={24} color="#0f3c91" />
-                    )}
-                  </TouchableOpacity>
-                )}
-                ListEmptyComponent={
-                  <Text
-                    style={{ textAlign: "center", padding: 20, color: "#999" }}
-                  >
-                    No school years available
-                  </Text>
-                }
               />
             </View>
           </View>

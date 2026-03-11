@@ -145,10 +145,7 @@ export default function NotificationsScreen() {
         <Text style={styles.timestamp}>{formatDate(item.created_at)}</Text>
         {(item.type === "payment_success" ||
           item.type === "payment_failed") && (
-          <View style={styles.tapHint}>
-            <Ionicons name="arrow-forward-outline" size={12} color="#0f3c91" />
-            <Text style={styles.tapHintText}>Tap to view payment history</Text>
-          </View>
+          <View style={styles.tapHint}></View>
         )}
       </View>
     </TouchableOpacity>
@@ -350,16 +347,7 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
     marginBottom: 6,
   },
-  tapHint: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  tapHintText: {
-    fontSize: 12,
-    color: "#0f3c91",
-    fontWeight: "500",
-  },
+
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",

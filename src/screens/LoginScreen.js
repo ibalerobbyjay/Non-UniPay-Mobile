@@ -24,8 +24,8 @@ export default function LoginScreen({ navigation }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // 👈 new state
-  const { login } = useContext(AuthContext);
+  const [showPassword, setShowPassword] = useState(false);
+  const { login, logout } = useContext(AuthContext); // 👈 get logout
 
   // Forgot Password States
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
@@ -45,6 +45,18 @@ export default function LoginScreen({ navigation }) {
       if (!result.success) {
         Alert.alert("Login Failed", result.message);
       } else {
+        // 🚨 Check if the user is an admin
+        if (result.user && result.user.role === "admin") {
+          // Immediately log out to clear any stored token
+          await logout();
+          Alert.alert(
+            "Access Denied",
+            "Admin accounts cannot log in to the mobile app. Please use the web admin panel.",
+          );
+          return; // Stop navigation
+        }
+
+        // Proceed to main app
         navigation.replace("MainTabs", { screen: "Home" });
       }
     } catch (error) {
@@ -169,7 +181,7 @@ export default function LoginScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
 
-              {/* ✅ Forgot Password Link */}
+              {/* Forgot Password Link */}
               <TouchableOpacity
                 style={styles.forgotPasswordContainer}
                 onPress={() => setForgotPasswordVisible(true)}
@@ -359,7 +371,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
 
-  // ✅ Forgot Password Link Styles
   forgotPasswordContainer: {
     alignItems: "flex-end",
     marginTop: 5,

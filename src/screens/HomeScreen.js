@@ -25,23 +25,8 @@ export default function HomeScreen({ navigation }) {
 
   const route = useRoute();
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, []),
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      if (route.params?.paymentSuccess) {
-        Alert.alert("Success", "Paid Successfully ✅");
-        loadData();
-        navigation.setParams({ paymentSuccess: false });
-      }
-    }, [route.params?.paymentSuccess]),
-  );
-
-  const loadData = async () => {
+  // Wrap loadData in useCallback so it can be safely used as a dependency
+  const loadData = useCallback(async () => {
     try {
       const [profileRes, clearanceRes, breakdownRes, unreadRes] =
         await Promise.all([
@@ -58,7 +43,33 @@ export default function HomeScreen({ navigation }) {
     } catch (error) {
       console.error("Error loading data:", error);
     }
-  };
+  }, []); // no external dependencies – state setters are stable
+
+  // Initial load when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData]),
+  );
+
+  // Auto-refresh every 5 seconds while screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      const interval = setInterval(loadData, 5000); // 5000 ms = 5 seconds
+      return () => clearInterval(interval);
+    }, [loadData]),
+  );
+
+  // Handle payment success from deep link or navigation param
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.paymentSuccess) {
+        Alert.alert("Success", "Paid Successfully ✅");
+        loadData();
+        navigation.setParams({ paymentSuccess: false });
+      }
+    }, [route.params?.paymentSuccess, loadData, navigation]),
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);

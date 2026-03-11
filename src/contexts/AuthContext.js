@@ -32,14 +32,25 @@ export const AuthProvider = ({ children }) => {
 
   async function login(email, password) {
     try {
-      console.log("Attempting login with:", email, password); // 🔹 log input
+      console.log("Attempting login with:", email, password);
 
       const response = await api.post("/login", { email, password });
 
-      console.log("API response:", response.data); // 🔹 log API response
+      console.log("API response:", response.data);
 
       const { access_token, user: userData } = response.data;
 
+      // 🚨 Block admin users immediately – do NOT store token
+      if (userData.role === "admin") {
+        console.log("Admin login blocked – token discarded");
+        return {
+          success: false,
+          message:
+            "Admin accounts cannot log in to the mobile app. Please use the web admin panel.",
+        };
+      }
+
+      // ✅ Store token only for non‑admin users
       setToken(access_token);
       setUser(userData);
 
@@ -48,11 +59,11 @@ export const AuthProvider = ({ children }) => {
 
       api.defaults.headers.Authorization = `Bearer ${access_token}`;
 
-      console.log("Login successful, token stored:", access_token); // 🔹 log token
+      console.log("Login successful, token stored:", access_token);
 
-      return { success: true };
+      return { success: true, user: userData };
     } catch (error) {
-      console.log("Login error:", error.response?.data || error.message); // 🔹 log server error
+      console.log("Login error:", error.response?.data || error.message);
 
       return {
         success: false,
@@ -76,7 +87,6 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.log("Registration error:", error.response?.data || error.message);
 
-      // ✅ Handle Laravel validation errors (422)
       if (error.response?.status === 422) {
         const errors = error.response.data.errors;
         const firstError = Object.values(errors)[0][0];
@@ -94,6 +104,7 @@ export const AuthProvider = ({ children }) => {
       };
     }
   }
+
   async function logout() {
     try {
       await api.post("/logout");
