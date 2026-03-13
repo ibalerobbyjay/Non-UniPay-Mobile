@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#667eea"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nonunipay.mobile"
@@ -27,6 +29,23 @@
     "web": {
       "favicon": "./assets/trinidad_logo.png"
     },
-    "plugins": ["expo-font"]
+    "plugins": [
+      "expo-font",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Non-UniPay to save receipts to your gallery.",
+          "savePhotosPermission": "Allow Non-UniPay to save receipts to your gallery.",
+          "isAccessMediaLocationEnabled": true,
+          "androidPermissions": [
+            "READ_EXTERNAL_STORAGE",
+            "WRITE_EXTERNAL_STORAGE",
+            "READ_MEDIA_IMAGES",
+            "READ_MEDIA_VIDEO"
+          ]
+        }
+      ],
+      "expo-asset"
+    ]
   }
 }

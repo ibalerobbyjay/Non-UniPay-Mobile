@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system/legacy";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Print from "expo-print";
@@ -8,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Modal,
   RefreshControl,
   ScrollView,
@@ -24,19 +26,31 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
   if (!receiptData) return null;
 
   const getStatusColor = (status) => {
-    const statusKey = (status || "").toLowerCase();
-    const colors = {
-      paid: "#4caf50",
-      pending: "rgb(244, 180, 20)",
-      failed: "#f44336",
-      default: "#666",
-    };
-    return colors[statusKey] || colors.default;
+    const s = (status || "").toLowerCase();
+    if (s === "paid") return "#4caf50";
+    if (s === "pending") return "rgb(244,180,20)";
+    if (s === "failed") return "#f44336";
+    return "#666";
   };
 
+  // Preserve original detailed PDF generation
   const handleDownload = async () => {
     setDownloading(true);
     try {
+      // Load logo as base64
+      let logoSrc = "";
+      try {
+        const asset = await Asset.fromModule(
+          require("../../assets/logo.png"),
+        ).downloadAsync();
+        const logoBase64 = await FileSystem.readAsStringAsync(asset.localUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        logoSrc = `data:image/png;base64,${logoBase64}`;
+      } catch (e) {
+        console.warn("Could not load logo:", e);
+      }
+
       const html = `
         <!DOCTYPE html>
         <html>
@@ -56,23 +70,96 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
             .receipt {
               background: white;
               border-radius: 16px;
-              max-width: 400px;
+              max-width: 420px;
               width: 100%;
               overflow: hidden;
-              box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+              box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+              position: relative;
             }
+
+            /* ── Watermark ── */
+            .watermark {
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              width: 260px;
+              height: 260px;
+              border-radius: 50%;
+              border: 8px solid rgba(15, 60, 145, 0.06);
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              text-align: center;
+              pointer-events: none;
+              z-index: 0;
+            }
+            .watermark::before {
+              content: '';
+              position: absolute;
+              inset: 10px;
+              border-radius: 50%;
+              border: 3px dashed rgba(15, 60, 145, 0.05);
+            }
+            .watermark img {
+              width: 130px;
+              height: 130px;
+              object-fit: contain;
+              opacity: 0.06;
+              position: relative;
+              z-index: 1;
+            }
+            .watermark-text {
+              font-size: 11px;
+              font-weight: 700;
+              color: rgba(15, 60, 145, 0.07);
+              text-transform: uppercase;
+              letter-spacing: 3px;
+              margin-top: 4px;
+              position: relative;
+              z-index: 1;
+            }
+
+            /* ── Header ── */
             .header {
               background: linear-gradient(135deg, #0f3c91, #1a4da8);
               color: white;
-              padding: 30px 20px;
+              padding: 28px 24px 20px;
               text-align: center;
+              position: relative;
+              z-index: 1;
             }
-            .header h1 { font-size: 22px; font-weight: bold; margin-bottom: 5px; }
-            .header p { font-size: 13px; opacity: 0.8; }
+            .header-logo-row {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 12px;
+              margin-bottom: 6px;
+            }
+            .logo-circle {
+              width: 56px;
+              height: 56px;
+              background: white;
+              border-radius: 50%;
+              overflow: hidden;
+              flex-shrink: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .logo-circle img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+              padding: 4px;
+            }
+            .header-text h1 { font-size: 22px; font-weight: bold; letter-spacing: 1px; }
+            .header-text p  { font-size: 11px; opacity: 0.75; margin-top: 2px; }
             .badge {
               display: inline-block;
-              margin-top: 12px;
-              padding: 6px 18px;
+              margin-top: 14px;
+              padding: 6px 20px;
               border-radius: 20px;
               font-size: 13px;
               font-weight: bold;
@@ -80,20 +167,26 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
               color: ${receiptData.status.toLowerCase() === "paid" ? "#4caf50" : "rgb(244,180,20)"};
               border: 1px solid ${receiptData.status.toLowerCase() === "paid" ? "#4caf50" : "rgb(244,180,20)"};
             }
-            .body { padding: 24px 20px; }
+
+            /* ── Body ── */
+            .body {
+              padding: 24px 20px;
+              position: relative;
+              z-index: 1;
+            }
             .row {
               display: flex;
               justify-content: space-between;
               align-items: center;
-              padding: 14px 0;
+              padding: 13px 0;
               border-bottom: 1px solid #f0f0f0;
             }
             .row:last-child { border-bottom: none; }
-            .label { font-size: 14px; color: #64748b; }
-            .value { font-size: 14px; font-weight: 600; color: #1e293b; text-align: right; max-width: 60%; }
+            .label { font-size: 13px; color: #64748b; }
+            .value { font-size: 13px; font-weight: 600; color: #1e293b; text-align: right; max-width: 60%; }
             .amount { font-size: 20px; color: #0f3c91; font-weight: bold; }
             .section-title {
-              font-size: 13px;
+              font-size: 11px;
               font-weight: 700;
               color: #0f3c91;
               text-transform: uppercase;
@@ -102,27 +195,48 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
               border-bottom: 2px solid #e2e8f0;
               margin-bottom: 4px;
             }
-            .fee-row .label { color: #94a3b8; font-size: 13px; }
-            .fee-row .value { color: #64748b; font-size: 13px; }
+            .fee-row .label { color: #94a3b8; font-size: 12px; }
+            .fee-row .value { color: #64748b; font-size: 12px; }
             .total-row { border-top: 2px solid #0f3c91 !important; margin-top: 4px; }
-            .total-label { font-weight: 700 !important; color: #0f3c91 !important; font-size: 15px !important; }
+            .total-label { font-weight: 700 !important; color: #0f3c91 !important; font-size: 14px !important; }
+
+            /* ── Footer ── */
             .footer {
               background: #f8fafc;
-              padding: 16px 20px;
+              padding: 14px 20px;
               text-align: center;
-              font-size: 12px;
+              font-size: 10px;
               color: #94a3b8;
               border-top: 1px solid #e2e8f0;
+              position: relative;
+              z-index: 1;
             }
           </style>
         </head>
         <body>
           <div class="receipt">
+
+            <!-- Watermark seal in background -->
+            <div class="watermark">
+              ${logoSrc ? `<img src="${logoSrc}" alt="seal" />` : ""}
+              <div class="watermark-text">Non-UniPay</div>
+            </div>
+
+            <!-- Header -->
             <div class="header">
-              <h1>Non-UniPay</h1>
-              <p>Official Payment Receipt</p>
+              <div class="header-logo-row">
+                <div class="logo-circle">
+                  ${logoSrc ? `<img src="${logoSrc}" alt="logo" />` : ""}
+                </div>
+                <div class="header-text">
+                  <h1>Non-UniPay</h1>
+                  <p>Official Payment Receipt</p>
+                </div>
+              </div>
               <div class="badge">${receiptData.status.toUpperCase()}</div>
             </div>
+
+            <!-- Body -->
             <div class="body">
               <div class="row">
                 <span class="label">Reference No.</span>
@@ -140,7 +254,6 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
                 <span class="label">Semester</span>
                 <span class="value">${receiptData.semester}</span>
               </div>
-
               ${
                 receiptData.fees && receiptData.fees.length > 0
                   ? `
@@ -158,15 +271,17 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
               `
                   : ""
               }
-
               <div class="row total-row">
                 <span class="label total-label">Total Amount</span>
                 <span class="value amount">₱${parseFloat(receiptData.amount).toLocaleString()}</span>
               </div>
             </div>
+
+            <!-- Footer -->
             <div class="footer">
               Thank you for your payment! • Non-UniPay System • ${new Date().getFullYear()}
             </div>
+
           </div>
         </body>
         </html>
@@ -198,102 +313,107 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
   return (
     <Modal
       visible={visible}
-      transparent
       animationType="slide"
+      transparent
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
+          {/* HEADER */}
           <LinearGradient
             colors={["#0f3c91", "#1a4da8"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
             style={styles.modalHeader}
           >
-            <View style={styles.modalHeaderLeft}>
-              <Ionicons name="receipt-outline" size={28} color="#fff" />
-              <Text style={styles.modalTitle}>Payment Receipt</Text>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.modalClose}>
+            <Text style={styles.modalTitle}>Payment Receipt</Text>
+            <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
           </LinearGradient>
 
-          <ScrollView style={styles.modalBody}>
+          {/* RECEIPT */}
+          <ScrollView contentContainerStyle={styles.modalScrollContent}>
             <View style={styles.receiptCard}>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Reference No.:</Text>
-                <Text style={styles.receiptValue}>
-                  {receiptData.reference_no}
-                </Text>
+              <Image
+                source={require("../../assets/logo.png")}
+                style={styles.logo}
+              />
+              <Text style={styles.receiptTitle}>Non-UniPay</Text>
+              <Text style={styles.receiptSub}>Official Payment Receipt</Text>
+
+              <View style={styles.divider} />
+
+              <View style={styles.row}>
+                <Text style={styles.label}>Reference No</Text>
+                <Text style={styles.value}>{receiptData.reference_no}</Text>
               </View>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Date & Time:</Text>
-                <Text style={styles.receiptValue}>{receiptData.date}</Text>
+              <View style={styles.row}>
+                <Text style={styles.label}>Date</Text>
+                <Text style={styles.value}>{receiptData.date}</Text>
               </View>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Payment Method:</Text>
-                <Text style={styles.receiptValue}>{receiptData.method}</Text>
+              <View style={styles.row}>
+                <Text style={styles.label}>Payment Method</Text>
+                <Text style={styles.value}>{receiptData.method}</Text>
               </View>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Semester:</Text>
-                <Text style={styles.receiptValue}>{receiptData.semester}</Text>
-              </View>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Amount:</Text>
-                <Text style={[styles.receiptValue, styles.receiptAmount]}>
-                  ₱{parseFloat(receiptData.amount).toLocaleString()}
-                </Text>
-              </View>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Status:</Text>
-                <View
-                  style={[
-                    styles.receiptStatusBadge,
-                    { backgroundColor: getStatusColor(receiptData.status) },
-                  ]}
-                >
-                  <Text style={styles.receiptStatusText}>
-                    {receiptData.status.toUpperCase()}
-                  </Text>
-                </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Semester</Text>
+                <Text style={styles.value}>{receiptData.semester}</Text>
               </View>
 
-              {/* Fee Breakdown */}
+              <View style={styles.divider} />
+
               {receiptData.fees && receiptData.fees.length > 0 && (
                 <>
-                  <View style={styles.breakdownHeader}>
-                    <Text style={styles.breakdownTitle}>Fee Breakdown</Text>
-                  </View>
+                  <Text style={styles.breakdownTitle}>Fee Breakdown</Text>
                   {receiptData.fees.map((fee, index) => (
-                    <View key={index} style={styles.receiptRow}>
-                      <Text style={styles.breakdownLabel}>
-                        {fee.name || fee.fee_name || "Fee"}
+                    <View key={index} style={styles.row}>
+                      <Text style={styles.label}>
+                        {fee.name || fee.fee_name}
                       </Text>
-                      <Text style={styles.breakdownValue}>
+                      <Text style={styles.value}>
                         ₱{parseFloat(fee.amount).toLocaleString()}
                       </Text>
                     </View>
                   ))}
                 </>
               )}
-            </View>
 
-            <TouchableOpacity
-              style={[styles.downloadBtn, downloading && { opacity: 0.7 }]}
-              onPress={handleDownload}
-              disabled={downloading}
-            >
-              {downloading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="download-outline" size={20} color="#fff" />
-                  <Text style={styles.downloadBtnText}>Download Receipt</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              <View style={styles.divider} />
+
+              <View style={styles.row}>
+                <Text style={styles.totalLabel}>Total</Text>
+                <Text style={styles.totalAmount}>
+                  ₱{parseFloat(receiptData.amount).toLocaleString()}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.modalStatusBadge,
+                  { backgroundColor: getStatusColor(receiptData.status) },
+                ]}
+              >
+                <Text style={styles.modalStatusText}>
+                  {receiptData.status.toUpperCase()}
+                </Text>
+              </View>
+            </View>
           </ScrollView>
+
+          {/* DOWNLOAD BUTTON */}
+          <TouchableOpacity
+            style={styles.downloadBtn}
+            onPress={handleDownload}
+            disabled={downloading}
+          >
+            {downloading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={20} color="#fff" />
+                <Text style={styles.downloadText}>Download PDF</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -320,11 +440,10 @@ export default function PaymentHistoryScreen() {
       const response = await api.get("/payments/history");
       const paymentsData = response.data.payments || [];
 
-      let paidSum = 0;
-      let pendingSum = 0;
-      let paid = 0;
-      let pending = 0;
-
+      let paidSum = 0,
+        pendingSum = 0,
+        paid = 0,
+        pending = 0;
       paymentsData.forEach((p) => {
         const amount = parseFloat(p.total_amount) || 0;
         const status = (p.status || "").toLowerCase();
@@ -342,7 +461,6 @@ export default function PaymentHistoryScreen() {
       setPaidCount(paid);
       setPendingCount(pending);
 
-      // ✅ Group by semester + school year
       const groups = {};
       paymentsData.forEach((p) => {
         let label = "Unknown Semester";
@@ -356,13 +474,12 @@ export default function PaymentHistoryScreen() {
         groups[label].push(p);
       });
 
-      // Convert to array sorted by most recent first
-      const grouped = Object.entries(groups).map(([semester, items]) => ({
-        semester,
-        items,
-      }));
-
-      setGroupedPayments(grouped);
+      setGroupedPayments(
+        Object.entries(groups).map(([semester, items]) => ({
+          semester,
+          items,
+        })),
+      );
     } catch (error) {
       console.error("Error loading payments:", error);
     } finally {
@@ -381,7 +498,6 @@ export default function PaymentHistoryScreen() {
       payment.reference_no ||
       payment.transaction?.reference_no ||
       `NUP-${payment.id}`;
-
     let semesterLabel = "N/A";
     if (payment.fees && payment.fees.length > 0) {
       const fee = payment.fees[0];
@@ -389,8 +505,7 @@ export default function PaymentHistoryScreen() {
       const syName = fee.school_year?.name || fee.school_year || "";
       semesterLabel = syName ? `${semName} — ${syName}` : semName;
     }
-
-    const receipt = {
+    setSelectedReceipt({
       reference_no: referenceNo,
       date: new Date(payment.payment_date || payment.created_at).toLocaleString(
         "en-US",
@@ -410,8 +525,7 @@ export default function PaymentHistoryScreen() {
       status: payment.status,
       semester: semesterLabel,
       fees: payment.fees || [],
-    };
-    setSelectedReceipt(receipt);
+    });
     setReceiptVisible(true);
   };
 
@@ -430,12 +544,11 @@ export default function PaymentHistoryScreen() {
       default: "help-circle",
     };
     const color = colors[statusKey] || colors.default;
-
     const getBackgroundColor = (c) => {
       if (c.startsWith("#")) {
-        const r = parseInt(c.slice(1, 3), 16);
-        const g = parseInt(c.slice(3, 5), 16);
-        const b = parseInt(c.slice(5, 7), 16);
+        const r = parseInt(c.slice(1, 3), 16),
+          g = parseInt(c.slice(3, 5), 16),
+          b = parseInt(c.slice(5, 7), 16);
         return `rgba(${r}, ${g}, ${b}, 0.2)`;
       } else if (c.startsWith("rgb(")) {
         const rgb = c.match(/\d+/g);
@@ -444,7 +557,6 @@ export default function PaymentHistoryScreen() {
       }
       return c + "33";
     };
-
     return (
       <View
         style={[
@@ -467,7 +579,6 @@ export default function PaymentHistoryScreen() {
   const renderPayment = (item) => {
     const displayReference =
       item.reference_no || item.transaction?.reference_no || `NUP-${item.id}`;
-
     return (
       <View key={item.id} style={styles.paymentCard}>
         <View style={styles.paymentHeader}>
@@ -476,7 +587,6 @@ export default function PaymentHistoryScreen() {
             ₱{parseFloat(item.total_amount).toLocaleString()}
           </Text>
         </View>
-
         <View style={styles.paymentDetails}>
           <View style={styles.detailRow}>
             <Ionicons name="receipt-outline" size={16} color="#666" />
@@ -500,7 +610,6 @@ export default function PaymentHistoryScreen() {
               </Text>
             </View>
           )}
-
           <TouchableOpacity
             style={styles.viewReceiptBtn}
             onPress={() => handleViewReceipt(item)}
@@ -515,7 +624,6 @@ export default function PaymentHistoryScreen() {
 
   const renderGroup = ({ item }) => (
     <View>
-      {/* ✅ Semester Header */}
       <View style={styles.semesterHeader}>
         <Ionicons name="school-outline" size={16} color="#0f3c91" />
         <Text style={styles.semesterHeaderText}>{item.semester}</Text>
@@ -598,6 +706,7 @@ export default function PaymentHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Main screen styles (from original)
   container: { flex: 1, backgroundColor: "#f0f2f5" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   summaryCard: {
@@ -650,11 +759,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: "#0f3c91",
   },
-  semesterHeaderText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#0f3c91",
-  },
+  semesterHeaderText: { fontSize: 14, fontWeight: "700", color: "#0f3c91" },
   paymentCard: {
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -709,6 +814,8 @@ const styles = StyleSheet.create({
   },
   emptyContainer: { alignItems: "center", marginTop: 100 },
   emptyText: { fontSize: 18, color: "#999", marginTop: 20 },
+
+  // Modal styles (simplified version)
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -718,7 +825,7 @@ const styles = StyleSheet.create({
   modalContent: {
     width: "90%",
     maxWidth: 380,
-    maxHeight: "85%",
+    maxHeight: "88%",
     backgroundColor: "#fff",
     borderRadius: 30,
     overflow: "hidden",
@@ -727,6 +834,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 15,
+    flexDirection: "column",
   },
   modalHeader: {
     flexDirection: "row",
@@ -735,63 +843,105 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 18,
   },
-  modalHeaderLeft: { flexDirection: "row", alignItems: "center" },
   modalTitle: {
     fontSize: 20,
     fontWeight: "700",
     color: "#fff",
-    marginLeft: 10,
   },
-  modalClose: { padding: 5 },
-  modalBody: { padding: 24 },
+  modalScrollContent: {
+    padding: 20,
+  },
   receiptCard: {
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#fff",
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
     borderColor: "#e2e8f0",
+    alignItems: "center",
   },
-  receiptRow: {
+  logo: {
+    width: 80,
+    height: 80,
+    marginBottom: 10,
+  },
+  receiptTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#0f3c91",
+  },
+  receiptSub: {
+    fontSize: 12,
+    color: "#64748b",
+    marginBottom: 10,
+  },
+  divider: {
+    width: "100%",
+    height: 1,
+    backgroundColor: "#e2e8f0",
+    marginVertical: 15,
+  },
+  row: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e9ecef",
+    width: "100%",
+    paddingVertical: 8,
   },
-  receiptLabel: { fontSize: 15, color: "#64748b", fontWeight: "500" },
-  receiptValue: { fontSize: 15, fontWeight: "600", color: "#1e293b" },
-  receiptAmount: { fontSize: 18, color: "#0f3c91" },
-  receiptStatusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
+  label: {
+    fontSize: 14,
+    color: "#64748b",
   },
-  receiptStatusText: { color: "#fff", fontWeight: "700", fontSize: 12 },
-  breakdownHeader: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
+  value: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e293b",
+    textAlign: "right",
+    maxWidth: "60%",
   },
-  breakdownTitle: {
-    fontSize: 12,
+  totalLabel: {
+    fontSize: 16,
     fontWeight: "700",
     color: "#0f3c91",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
-  breakdownLabel: { fontSize: 14, color: "#94a3b8" },
-  breakdownValue: { fontSize: 14, fontWeight: "600", color: "#64748b" },
+  totalAmount: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#0f3c91",
+  },
+  modalStatusBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: "center",
+    marginTop: 10,
+  },
+  modalStatusText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
   downloadBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#0f3c91",
     paddingVertical: 14,
+    marginHorizontal: 20,
+    marginVertical: 14,
     borderRadius: 30,
-    marginTop: 16,
-    marginBottom: 8,
     gap: 8,
   },
-  downloadBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  downloadText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  breakdownTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0f3c91",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    alignSelf: "flex-start",
+    marginBottom: 5,
+  },
 });
