@@ -1,11 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
+import { useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { useContext, useEffect, useState } from "react";
+import { LinearGradient } from "expo-linear-gradient";
+import { useCallback, useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,7 +22,12 @@ import api from "../services/api";
 const COURSES = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
 const YEAR_LEVELS = ["1", "2", "3", "4"];
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
+  // Hide the navigation header
+  useEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
+
   const { user, logout } = useContext(AuthContext);
   const [profile, setProfile] = useState(null);
   const [editing, setEditing] = useState(false);
@@ -34,10 +42,7 @@ export default function ProfileScreen() {
   const [cooldownMessage, setCooldownMessage] = useState(null);
   const [nextAllowed, setNextAllowed] = useState(null);
   const [pictureCooldown, setPictureCooldown] = useState(null);
-
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadProfile = async () => {
     try {
@@ -72,11 +77,11 @@ export default function ProfileScreen() {
       if (response.data.last_picture_update) {
         const last = new Date(response.data.last_picture_update);
         const next = new Date(last);
-        next.setDate(next.getDate() + 1);
+        next.setDate(next.getDate() + 7);
         const now = new Date();
         if (now < next) {
           const daysLeft = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
-          setPictureCooldown(`Photo locked for ${daysLeft}  day.`);
+          setPictureCooldown(`Photo update available in ${daysLeft} day(s).`);
         } else {
           setPictureCooldown(null);
         }
@@ -84,6 +89,18 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error("Error loading profile:", error);
     }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, []),
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadProfile();
+    setRefreshing(false);
   };
 
   const handleUpdate = async () => {
@@ -181,50 +198,66 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={pickImage}
-          style={styles.avatarContainer}
-          disabled={uploading}
-        >
-          {profile?.profile_picture ? (
-            <Image
-              source={{ uri: profile.profile_picture }}
-              style={styles.avatar}
-            />
-          ) : (
-            <Ionicons name="person-circle" size={100} color="#fff" />
-          )}
-          {uploading && (
-            <View style={styles.uploadOverlay}>
-              <ActivityIndicator color="#fff" />
-            </View>
-          )}
-          {/* Lock or camera badge */}
-          <View
-            style={[
-              styles.editBadge,
-              pictureCooldown && { backgroundColor: "#94a3b8" },
-            ]}
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor="#0f3c91"
+        />
+      }
+    >
+      {/* Header with gradient */}
+      <LinearGradient
+        colors={["#0f3c91", "#1a4da8"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.avatarSection}>
+          <TouchableOpacity
+            onPress={pickImage}
+            style={styles.avatarContainer}
+            disabled={uploading}
           >
-            <Ionicons
-              name={pictureCooldown ? "lock-closed" : "camera"}
-              size={20}
-              color="#fff"
-            />
-          </View>
-        </TouchableOpacity>
+            {profile?.profile_picture ? (
+              <Image
+                source={{ uri: profile.profile_picture }}
+                style={styles.avatar}
+              />
+            ) : (
+              <Ionicons name="person-circle" size={100} color="#fff" />
+            )}
+            {uploading && (
+              <View style={styles.uploadOverlay}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            )}
+            {/* Lock or camera badge */}
+            <View
+              style={[
+                styles.editBadge,
+                pictureCooldown && { backgroundColor: "#94a3b8" },
+              ]}
+            >
+              <Ionicons
+                name={pictureCooldown ? "lock-closed" : "camera"}
+                size={20}
+                color="#fff"
+              />
+            </View>
+          </TouchableOpacity>
 
-        <Text style={styles.name}>{user?.name}</Text>
-        <Text style={styles.email}>{formData.email || user?.email}</Text>
+          <Text style={styles.name}>{user?.name}</Text>
+          <Text style={styles.email}>{formData.email || user?.email}</Text>
 
-        {/* Picture cooldown message */}
-        {pictureCooldown && (
-          <Text style={styles.pictureCooldownText}>{pictureCooldown}</Text>
-        )}
-      </View>
+          {/* Picture cooldown message */}
+          {pictureCooldown && (
+            <Text style={styles.pictureCooldownText}>{pictureCooldown}</Text>
+          )}
+        </View>
+      </LinearGradient>
 
       <View style={styles.content}>
         <View style={styles.section}>
@@ -384,20 +417,21 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f0f2f5",
+    backgroundColor: "#f8fafc",
   },
-  header: {
-    backgroundColor: "#0f3c91",
+  headerGradient: {
     paddingTop: 60,
     paddingBottom: 30,
-    alignItems: "center",
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
-    elevation: 4,
-    shadowColor: "#000",
+    elevation: 8,
+    shadowColor: "#0f3c91",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  avatarSection: {
+    alignItems: "center",
   },
   avatarContainer: {
     marginBottom: 15,
@@ -409,6 +443,7 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     borderWidth: 3,
     borderColor: "rgb(244, 180, 20)",
+    backgroundColor: "#fff",
   },
   uploadOverlay: {
     position: "absolute",
@@ -433,22 +468,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 2,
     borderColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   name: {
     fontSize: 24,
     fontWeight: "bold",
     color: "#fff",
+    marginBottom: 4,
   },
   email: {
     fontSize: 16,
     color: "rgba(255,255,255,0.9)",
-    marginTop: 5,
   },
   pictureCooldownText: {
     fontSize: 12,
     color: "rgba(255,255,255,0.6)",
-    marginTop: 6,
+    marginTop: 8,
     fontStyle: "italic",
+    textAlign: "center",
   },
   content: {
     padding: 20,
@@ -460,15 +501,20 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
   },
   sectionTitle: {
     fontSize: 18,
@@ -478,14 +524,16 @@ const styles = StyleSheet.create({
   cooldownBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(244,180,20,0.1)",
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 15,
+    backgroundColor: "#fffbeb",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
     gap: 8,
+    borderWidth: 1,
+    borderColor: "rgb(244, 180, 20)",
   },
   cooldownText: {
-    color: "#b26a00",
+    color: "#92400e",
     fontSize: 13,
     flex: 1,
   },
@@ -494,25 +542,25 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: "#f8fafc",
   },
   infoLabel: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#64748b",
   },
   infoValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
     color: "#1e293b",
   },
   inputGroup: {
-    marginBottom: 15,
+    marginBottom: 16,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: "600",
     marginBottom: 8,
-    color: "#64748b",
+    color: "#475569",
   },
   input: {
     borderWidth: 1,
@@ -537,13 +585,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 10,
+    gap: 10,
   },
   button: {
     flex: 1,
-    padding: 16,
+    padding: 14,
     borderRadius: 30,
     alignItems: "center",
-    marginHorizontal: 5,
   },
   cancelButton: {
     backgroundColor: "#f1f5f9",
@@ -554,10 +602,12 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: "#475569",
     fontWeight: "600",
+    fontSize: 16,
   },
   saveButtonText: {
     color: "#fff",
     fontWeight: "600",
+    fontSize: 16,
   },
   logoutButton: {
     backgroundColor: "#fff",
@@ -570,14 +620,14 @@ const styles = StyleSheet.create({
     borderColor: "#f44336",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
+    gap: 8,
   },
   logoutText: {
     color: "#f44336",
     fontSize: 16,
     fontWeight: "600",
-    marginLeft: 10,
   },
 });
