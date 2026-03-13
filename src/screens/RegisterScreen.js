@@ -39,12 +39,22 @@ export default function RegisterScreen({ navigation }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { register } = useContext(AuthContext);
 
+  // Validation states
+  const [emailError, setEmailError] = useState("");
+  const [studentNoError, setStudentNoError] = useState("");
+  const [contactError, setContactError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordStrength, setPasswordStrength] = useState(0); // 0-4
+  const [passwordMatch, setPasswordMatch] = useState(true);
+
+  // Modal states
   const [courseModalVisible, setCourseModalVisible] = useState(false);
   const [yearModalVisible, setYearModalVisible] = useState(false);
 
   const courses = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
   const yearLevels = ["1", "2", "3", "4"];
 
+  // Load school year and semester on mount
   useEffect(() => {
     api
       .get("/school-years")
@@ -63,14 +73,88 @@ export default function RegisterScreen({ navigation }) {
       .catch((err) => console.error("Failed to load school years:", err));
   }, []);
 
-  const handleRegister = async () => {
-    if (Object.values(formData).some((val) => !val)) {
-      Alert.alert("Error", "Please fill in all fields");
-      return;
+  // Validate email
+  useEffect(() => {
+    const email = formData.email;
+    if (email.length === 0) {
+      setEmailError("");
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError("Please enter a valid email address");
+    } else {
+      setEmailError("");
+    }
+  }, [formData.email]);
+
+  // Validate student number (format: XX-XXXXXX)
+  useEffect(() => {
+    const studentNo = formData.student_no;
+    if (studentNo.length === 0) {
+      setStudentNoError("");
+    } else if (!/^\d{2}-\d{6}$/.test(studentNo)) {
+      setStudentNoError("Student number must be in format XX-XXXXXX");
+    } else {
+      setStudentNoError("");
+    }
+  }, [formData.student_no]);
+
+  // Validate contact number (exactly 11 digits starting with 09)
+  useEffect(() => {
+    const contact = formData.contact;
+    if (contact.length === 0) {
+      setContactError("");
+    } else if (!/^09\d{9}$/.test(contact) || contact.length !== 11) {
+      setContactError("Contact must be 11 digits starting with 09");
+    } else {
+      setContactError("");
+    }
+  }, [formData.contact]);
+
+  // Validate password & confirm
+  useEffect(() => {
+    const pw = formData.password;
+    let strength = 0;
+    if (pw.length >= 8) strength++;
+    if (/[a-z]/.test(pw)) strength++;
+    if (/[A-Z]/.test(pw)) strength++;
+    if (/[0-9]/.test(pw)) strength++;
+    if (/[^a-zA-Z0-9]/.test(pw)) strength++;
+    setPasswordStrength(Math.min(strength, 4));
+
+    if (pw.length === 0) {
+      setPasswordError("");
+    } else if (pw.length < 8) {
+      setPasswordError("Password must be at least 8 characters");
+    } else if (strength < 3) {
+      setPasswordError(
+        "Add uppercase, number, or symbol for stronger password",
+      );
+    } else {
+      setPasswordError("");
     }
 
-    if (formData.password !== formData.password_confirmation) {
-      Alert.alert("Error", "Passwords do not match");
+    if (formData.password_confirmation.length > 0) {
+      setPasswordMatch(pw === formData.password_confirmation);
+    } else {
+      setPasswordMatch(true);
+    }
+  }, [formData.password, formData.password_confirmation]);
+
+  // Check if form is valid for submission
+  const isFormValid = () => {
+    return (
+      Object.values(formData).every((val) => val.trim() !== "") &&
+      emailError === "" &&
+      studentNoError === "" &&
+      contactError === "" &&
+      passwordError === "" &&
+      passwordMatch &&
+      formData.password_confirmation.length > 0
+    );
+  };
+
+  const handleRegister = async () => {
+    if (!isFormValid()) {
+      Alert.alert("Error", "Please correct the errors before submitting");
       return;
     }
 
@@ -136,34 +220,54 @@ export default function RegisterScreen({ navigation }) {
                 />
               </View>
 
-              {/* Email */}
-              <View style={styles.inputContainer}>
-                <Ionicons name="mail-outline" size={20} color="#666" />
-                <TextInput
-                  placeholder="Email"
-                  placeholderTextColor="#999"
-                  style={styles.input}
-                  value={formData.email}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, email: text })
-                  }
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
+              {/* Email with validation */}
+              <View>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    emailError ? styles.inputError : null,
+                  ]}
+                >
+                  <Ionicons name="mail-outline" size={20} color="#666" />
+                  <TextInput
+                    placeholder="Email"
+                    placeholderTextColor="#999"
+                    style={styles.input}
+                    value={formData.email}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, email: text })
+                    }
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                  />
+                </View>
+                {emailError ? (
+                  <Text style={styles.errorText}>{emailError}</Text>
+                ) : null}
               </View>
 
-              {/* Student Number */}
-              <View style={styles.inputContainer}>
-                <Ionicons name="card-outline" size={20} color="#666" />
-                <TextInput
-                  placeholder="Student Number"
-                  placeholderTextColor="#999"
-                  style={styles.input}
-                  value={formData.student_no}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, student_no: text })
-                  }
-                />
+              {/* Student Number with validation */}
+              <View>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    studentNoError ? styles.inputError : null,
+                  ]}
+                >
+                  <Ionicons name="card-outline" size={20} color="#666" />
+                  <TextInput
+                    placeholder="Student Number (XX-XXXXXX)"
+                    placeholderTextColor="#999"
+                    style={styles.input}
+                    value={formData.student_no}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, student_no: text })
+                    }
+                  />
+                </View>
+                {studentNoError ? (
+                  <Text style={styles.errorText}>{studentNoError}</Text>
+                ) : null}
               </View>
 
               {/* Course Picker */}
@@ -202,22 +306,33 @@ export default function RegisterScreen({ navigation }) {
                 <Ionicons name="chevron-down" size={20} color="#999" />
               </TouchableOpacity>
 
-              {/* Contact */}
-              <View style={styles.inputContainer}>
-                <Ionicons name="call-outline" size={20} color="#666" />
-                <TextInput
-                  placeholder="Contact Number"
-                  placeholderTextColor="#999"
-                  style={styles.input}
-                  value={formData.contact}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, contact: text })
-                  }
-                  keyboardType="phone-pad"
-                />
+              {/* Contact Number with validation */}
+              <View>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    contactError ? styles.inputError : null,
+                  ]}
+                >
+                  <Ionicons name="call-outline" size={20} color="#666" />
+                  <TextInput
+                    placeholder="Contact Number (09XXXXXXXXX)"
+                    placeholderTextColor="#999"
+                    style={styles.input}
+                    value={formData.contact}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, contact: text })
+                    }
+                    keyboardType="phone-pad"
+                    maxLength={11}
+                  />
+                </View>
+                {contactError ? (
+                  <Text style={styles.errorText}>{contactError}</Text>
+                ) : null}
               </View>
 
-              {/* Semester (read-only, auto-filled) */}
+              {/* Semester (read-only) */}
               <View style={[styles.inputContainer, { opacity: 0.7 }]}>
                 <Ionicons name="calendar-outline" size={20} color="#666" />
                 <Text
@@ -231,7 +346,7 @@ export default function RegisterScreen({ navigation }) {
                 <Ionicons name="lock-closed-outline" size={16} color="#bbb" />
               </View>
 
-              {/* School Year (read-only, auto-filled) */}
+              {/* School Year (read-only) */}
               <View style={[styles.inputContainer, { opacity: 0.7 }]}>
                 <Ionicons name="time-outline" size={20} color="#666" />
                 <Text
@@ -260,7 +375,6 @@ export default function RegisterScreen({ navigation }) {
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Ionicons
                     name={showPassword ? "eye-off-outline" : "eye-outline"}
@@ -270,38 +384,110 @@ export default function RegisterScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
 
+              {/* Password strength indicator */}
+              {formData.password.length > 0 && (
+                <>
+                  <View style={styles.strengthBarContainer}>
+                    {[1, 2, 3, 4].map((level) => (
+                      <View
+                        key={level}
+                        style={[
+                          styles.strengthBar,
+                          {
+                            backgroundColor:
+                              passwordStrength >= level
+                                ? level === 1
+                                  ? "#f44"
+                                  : level === 2
+                                    ? "#f90"
+                                    : level === 3
+                                      ? "#fc3"
+                                      : "#0c6"
+                                : "#ddd",
+                          },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <Text style={styles.strengthText}>
+                    {passwordStrength <= 1
+                      ? "Weak"
+                      : passwordStrength === 2
+                        ? "Fair"
+                        : passwordStrength === 3
+                          ? "Good"
+                          : "Strong"}
+                  </Text>
+                  {passwordError ? (
+                    <Text style={styles.errorText}>{passwordError}</Text>
+                  ) : null}
+                </>
+              )}
+
               {/* Confirm Password */}
-              <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={20} color="#666" />
-                <TextInput
-                  placeholder="Confirm Password"
-                  placeholderTextColor="#999"
-                  style={styles.input}
-                  value={formData.password_confirmation}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, password_confirmation: text })
-                  }
-                  secureTextEntry={!showConfirmPassword}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              <View>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    !passwordMatch && formData.password_confirmation.length > 0
+                      ? styles.inputError
+                      : null,
+                  ]}
                 >
-                  <Ionicons
-                    name={
-                      showConfirmPassword ? "eye-off-outline" : "eye-outline"
+                  <Ionicons name="lock-closed-outline" size={20} color="#666" />
+                  <TextInput
+                    placeholder="Confirm Password"
+                    placeholderTextColor="#999"
+                    style={styles.input}
+                    value={formData.password_confirmation}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, password_confirmation: text })
                     }
-                    size={22}
-                    color="#666"
+                    secureTextEntry={!showConfirmPassword}
                   />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    <Ionicons
+                      name={
+                        showConfirmPassword ? "eye-off-outline" : "eye-outline"
+                      }
+                      size={22}
+                      color="#666"
+                    />
+                  </TouchableOpacity>
+                  {formData.password_confirmation.length > 0 &&
+                    (passwordMatch ? (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={24}
+                        color="#4caf50"
+                      />
+                    ) : (
+                      <Ionicons name="close-circle" size={24} color="#f44336" />
+                    ))}
+                </View>
+                {!passwordMatch &&
+                  formData.password_confirmation.length > 0 && (
+                    <Text
+                      style={[
+                        styles.errorText,
+                        { marginTop: -5, marginBottom: 10 },
+                      ]}
+                    >
+                      Passwords do not match
+                    </Text>
+                  )}
               </View>
             </View>
 
             <TouchableOpacity
-              style={styles.registerButton}
+              style={[
+                styles.registerButton,
+                !isFormValid() && styles.registerButtonDisabled,
+              ]}
               onPress={handleRegister}
-              disabled={loading}
+              disabled={loading || !isFormValid()}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -400,7 +586,7 @@ export default function RegisterScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    minHeight: 1000,
+    minHeight: 1050,
   },
   topSection: {
     height: 220,
@@ -464,12 +650,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     fontSize: 15,
   },
+  inputError: {
+    borderWidth: 1,
+    borderColor: "#f44336",
+  },
+  errorText: {
+    color: "#f44336",
+    fontSize: 12,
+    marginLeft: 15,
+    marginBottom: 10,
+  },
+  strengthBarContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 5,
+    marginBottom: 5,
+    marginHorizontal: 15,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    marginHorizontal: 2,
+  },
+  strengthText: {
+    fontSize: 12,
+    color: "#666",
+    marginLeft: 15,
+    marginBottom: 5,
+  },
   registerButton: {
     backgroundColor: "#0f3c91",
     padding: 15,
     borderRadius: 25,
     alignItems: "center",
     marginTop: 10,
+  },
+  registerButtonDisabled: {
+    backgroundColor: "#7297dc",
   },
   registerText: {
     color: "#fff",

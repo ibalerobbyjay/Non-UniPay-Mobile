@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,42 +21,57 @@ import { AuthContext } from "../contexts/AuthContext";
 import api from "../services/api";
 
 export default function LoginScreen({ navigation }) {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { login, logout } = useContext(AuthContext); // 👈 get logout
+  const { login, logout } = useContext(AuthContext);
+
+  // Validation state
+  const [emailError, setEmailError] = useState("");
 
   // Forgot Password States
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
 
+  // Validate email format
+  useEffect(() => {
+    if (email.length === 0) {
+      setEmailError("");
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError("Please enter a valid email address");
+    } else {
+      setEmailError("");
+    }
+  }, [email]);
+
+  // Form validity
+  const isFormValid = () => {
+    return email.length > 0 && password.length > 0 && emailError === "";
+  };
+
   const handleLogin = async () => {
-    if (!username || !password) {
-      Alert.alert("Error", "Please fill in all fields");
+    if (!isFormValid()) {
+      Alert.alert("Error", "Please enter a valid email and password");
       return;
     }
 
     setLoading(true);
     try {
-      const result = await login(username, password);
+      const result = await login(email, password);
 
       if (!result.success) {
         Alert.alert("Login Failed", result.message);
       } else {
-        // 🚨 Check if the user is an admin
         if (result.user && result.user.role === "admin") {
-          // Immediately log out to clear any stored token
           await logout();
           Alert.alert(
             "Access Denied",
             "Admin accounts cannot log in to the mobile app. Please use the web admin panel.",
           );
-          return; // Stop navigation
+          return;
         }
-
-        // Proceed to main app
         navigation.replace("MainTabs", { screen: "Home" });
       }
     } catch (error) {
@@ -66,7 +81,7 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  // ✅ Handle Forgot Password
+  // Handle Forgot Password
   const handleForgotPassword = async () => {
     if (!resetEmail) {
       Alert.alert("Error", "Please enter your email address");
@@ -80,7 +95,6 @@ export default function LoginScreen({ navigation }) {
     }
 
     setResetLoading(true);
-
     try {
       const response = await api.post("/password/reset-request", {
         email: resetEmail,
@@ -104,7 +118,6 @@ export default function LoginScreen({ navigation }) {
       }
     } catch (error) {
       console.error("Forgot password error:", error);
-
       if (error.response?.status === 404) {
         Alert.alert("Error", "Email not found in our system");
       } else {
@@ -125,7 +138,7 @@ export default function LoginScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.container}>
-          {/* ===== TOP IMAGE ===== */}
+          {/* TOP IMAGE */}
           <ImageBackground
             source={require("../../assets/bg.jpg")}
             style={styles.topSection}
@@ -138,7 +151,7 @@ export default function LoginScreen({ navigation }) {
             />
           </ImageBackground>
 
-          {/* ===== GLASSY OVERLAPPING SECTION ===== */}
+          {/* GLASSY OVERLAPPING SECTION */}
           <BlurView intensity={50} tint="dark" style={styles.bottomSection}>
             <Text style={styles.title}>Non-UniPay</Text>
             <Text style={styles.description}>
@@ -146,18 +159,31 @@ export default function LoginScreen({ navigation }) {
             </Text>
 
             <View style={styles.card}>
-              <View style={styles.inputContainer}>
-                <Ionicons name="person-outline" size={20} color="#666" />
-                <TextInput
-                  placeholder="Email"
-                  placeholderTextColor="#999"
-                  style={styles.input}
-                  value={username}
-                  onChangeText={setUsername}
-                  autoCapitalize="none"
-                />
+              {/* Email with validation */}
+              <View>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    emailError ? styles.inputError : null,
+                  ]}
+                >
+                  <Ionicons name="person-outline" size={20} color="#666" />
+                  <TextInput
+                    placeholder="Email"
+                    placeholderTextColor="#999"
+                    style={styles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                  />
+                </View>
+                {emailError ? (
+                  <Text style={styles.errorText}>{emailError}</Text>
+                ) : null}
               </View>
 
+              {/* Password */}
               <View style={styles.inputContainer}>
                 <Ionicons name="lock-closed-outline" size={20} color="#666" />
                 <TextInput
@@ -168,7 +194,6 @@ export default function LoginScreen({ navigation }) {
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
                 />
-
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -191,9 +216,12 @@ export default function LoginScreen({ navigation }) {
             </View>
 
             <TouchableOpacity
-              style={styles.loginButton}
+              style={[
+                styles.loginButton,
+                !isFormValid() && styles.loginButtonDisabled,
+              ]}
               onPress={handleLogin}
-              disabled={loading}
+              disabled={loading || !isFormValid()}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -219,7 +247,7 @@ export default function LoginScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* ===== FORGOT PASSWORD MODAL ===== */}
+      {/* FORGOT PASSWORD MODAL */}
       <Modal
         visible={forgotPasswordVisible}
         transparent
@@ -231,7 +259,6 @@ export default function LoginScreen({ navigation }) {
             behavior={Platform.OS === "ios" ? "padding" : "height"}
           >
             <View style={styles.modalContent}>
-              {/* Header */}
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Reset Password</Text>
                 <TouchableOpacity
@@ -242,13 +269,11 @@ export default function LoginScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
 
-              {/* Description */}
               <Text style={styles.modalDescription}>
                 Enter your email address and we'll send you instructions to
                 reset your password.
               </Text>
 
-              {/* Email Input */}
               <View style={styles.modalInputContainer}>
                 <Ionicons name="mail-outline" size={22} color="#666" />
                 <TextInput
@@ -263,7 +288,6 @@ export default function LoginScreen({ navigation }) {
                 />
               </View>
 
-              {/* Send Button */}
               <TouchableOpacity
                 style={styles.sendButton}
                 onPress={handleForgotPassword}
@@ -279,7 +303,6 @@ export default function LoginScreen({ navigation }) {
                 )}
               </TouchableOpacity>
 
-              {/* Cancel Button */}
               <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => {
@@ -301,12 +324,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-
   topSection: {
     flex: 0.45,
     overflow: "hidden",
   },
-
   bottomSection: {
     position: "absolute",
     bottom: 0,
@@ -318,14 +339,12 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     backgroundColor: "#ffffffec",
   },
-
   logoWrapper: {
     position: "absolute",
     top: "30%",
     alignSelf: "center",
     zIndex: 10,
   },
-
   logo: {
     width: 130,
     height: 130,
@@ -334,7 +353,6 @@ const styles = StyleSheet.create({
     borderColor: "#fff",
     backgroundColor: "#fff",
   },
-
   title: {
     fontSize: 32,
     fontWeight: "bold",
@@ -342,20 +360,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 5,
   },
-
   description: {
     fontSize: 13,
     color: "#000000",
     textAlign: "center",
     marginBottom: 20,
   },
-
   card: {
     backgroundColor: "rgba(255,255,255,0.9)",
     borderRadius: 20,
     padding: 20,
   },
-
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -364,25 +379,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     marginBottom: 10,
   },
-
   input: {
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 10,
+    fontSize: 15,
   },
-
+  inputError: {
+    borderWidth: 1,
+    borderColor: "#f44336",
+  },
+  errorText: {
+    color: "#f44336",
+    fontSize: 12,
+    marginLeft: 15,
+    marginBottom: 10,
+  },
   forgotPasswordContainer: {
     alignItems: "flex-end",
     marginTop: 5,
     marginBottom: 5,
   },
-
   forgotPasswordText: {
     color: "#0f3c91",
     fontSize: 13,
     fontWeight: "600",
   },
-
   loginButton: {
     backgroundColor: "#0f3c91",
     padding: 15,
@@ -390,13 +412,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 20,
   },
-
+  loginButtonDisabled: {
+    backgroundColor: "#7297dc",
+  },
   loginText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
   },
-
   signupButton: {
     marginTop: 15,
     borderWidth: 1,
@@ -406,14 +429,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgb(244, 180, 20)",
   },
-
   signupText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
   },
-
-  // ===== MODAL STYLES =====
+  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -421,7 +442,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
-
   modalContent: {
     backgroundColor: "#fff",
     borderRadius: 55,
@@ -434,31 +454,26 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 15,
   },
-
   modalTitle: {
     fontSize: 24,
     fontWeight: "bold",
     color: "#0f3c91",
   },
-
   closeButton: {
     padding: 5,
   },
-
   modalDescription: {
     fontSize: 14,
     color: "#666",
     lineHeight: 20,
     marginBottom: 20,
   },
-
   modalInputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -469,14 +484,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e0e0e0",
   },
-
   modalInput: {
     flex: 1,
     paddingVertical: 15,
     paddingHorizontal: 10,
     fontSize: 15,
   },
-
   sendButton: {
     backgroundColor: "#0f3c91",
     flexDirection: "row",
@@ -486,19 +499,16 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     marginBottom: 10,
   },
-
   sendButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
     marginLeft: 8,
   },
-
   cancelButton: {
     padding: 14,
     alignItems: "center",
   },
-
   cancelButtonText: {
     color: "#666",
     fontSize: 15,
