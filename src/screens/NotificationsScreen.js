@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,10 +15,16 @@ import {
 import api from "../services/api";
 
 export default function NotificationsScreen() {
+  const navigation = useNavigation();
+
+  // Hide the navigation header
+  useEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
+
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const navigation = useNavigation();
 
   const loadNotifications = async () => {
     try {
@@ -145,7 +151,7 @@ export default function NotificationsScreen() {
         <Text style={styles.timestamp}>{formatDate(item.created_at)}</Text>
         {(item.type === "payment_success" ||
           item.type === "payment_failed") && (
-          <View style={styles.tapHint}></View>
+          <Text style={styles.tapHint}>Tap to view details</Text>
         )}
       </View>
     </TouchableOpacity>
@@ -168,10 +174,15 @@ export default function NotificationsScreen() {
         style={styles.headerGradient}
       >
         <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>Notifications</Text>
           {notifications.length > 0 && (
             <View style={styles.headerActions}>
-              {/* Mark All as Read */}
               <TouchableOpacity
                 style={styles.markReadBtn}
                 onPress={markAllAsRead}
@@ -181,16 +192,14 @@ export default function NotificationsScreen() {
                   size={16}
                   color="#fff"
                 />
-                <Text style={styles.markReadBtnText}>Mark Read</Text>
+                <Text style={styles.markReadBtnText}></Text>
               </TouchableOpacity>
-
-              {/* Clear All */}
               <TouchableOpacity
                 style={styles.clearBtn}
                 onPress={handleClearAll}
               >
                 <Ionicons name="trash-outline" size={16} color="#fff" />
-                <Text style={styles.clearBtnText}>Clear All</Text>
+                <Text style={styles.clearBtnText}></Text>
               </TouchableOpacity>
             </View>
           )}
@@ -219,7 +228,11 @@ export default function NotificationsScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-off-outline" size={64} color="#ccc" />
+            <Ionicons
+              name="notifications-off-outline"
+              size={64}
+              color="#cbd5e1"
+            />
             <Text style={styles.emptyText}>No notifications</Text>
           </View>
         }
@@ -229,34 +242,51 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f0f2f5" },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  container: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   headerGradient: {
     paddingTop: 60,
     paddingBottom: 30,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     elevation: 8,
-    shadowColor: "#000",
+    shadowColor: "#0f3c91",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
   },
   headerRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
     alignItems: "center",
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "bold",
     color: "#fff",
+    flex: 1,
   },
   headerSubtitle: {
     fontSize: 13,
     color: "rgba(255,255,255,0.7)",
-    marginTop: 6,
+    marginTop: 8,
+    paddingLeft: 52, // align with back button offset
   },
   headerActions: {
     flexDirection: "row",
@@ -292,26 +322,27 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+    paddingBottom: 30,
   },
   notificationItem: {
     flexDirection: "row",
     backgroundColor: "#fff",
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: "#f1f5f9",
     alignItems: "flex-start",
   },
   notificationUnread: {
     borderLeftWidth: 4,
     borderLeftColor: "#0f3c91",
-    backgroundColor: "rgba(15, 60, 145, 0.03)",
+    backgroundColor: "#f8fafc",
   },
   iconContainer: {
     width: 48,
@@ -324,34 +355,41 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    position: "relative",
   },
   unreadDot: {
     position: "absolute",
     top: 0,
     right: 0,
-    width: 9,
-    height: 9,
+    width: 10,
+    height: 10,
     borderRadius: 5,
     backgroundColor: "#0f3c91",
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   message: {
     fontSize: 15,
     fontWeight: "500",
     color: "#1e293b",
-    marginBottom: 4,
+    marginBottom: 6,
     lineHeight: 21,
-    paddingRight: 14,
+    paddingRight: 20,
   },
   timestamp: {
     fontSize: 12,
     color: "#94a3b8",
-    marginBottom: 6,
+    marginBottom: 4,
   },
-
+  tapHint: {
+    fontSize: 12,
+    color: "#0f3c91",
+    fontWeight: "500",
+  },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 60,
+    paddingVertical: 80,
   },
   emptyText: {
     marginTop: 16,

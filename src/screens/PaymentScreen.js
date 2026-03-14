@@ -1,9 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Linking,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,19 +16,20 @@ import {
 import api from "../services/api";
 
 export default function PaymentScreen({ navigation }) {
+  // Hide the navigation header
+  useEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
+
   const [feeBreakdown, setFeeBreakdown] = useState(null);
   const [selectedFees, setSelectedFees] = useState({});
   const [selectedTotal, setSelectedTotal] = useState(0);
-  const [paidFeeIds, setPaidFeeIds] = useState(new Set()); // 👈 track paid fees
+  const [paidFeeIds, setPaidFeeIds] = useState(new Set());
   const [loading, setLoading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  // Load fee breakdown and payment history concurrently
   const loadData = async () => {
     try {
       const [feesRes, historyRes] = await Promise.all([
@@ -36,7 +40,6 @@ export default function PaymentScreen({ navigation }) {
       const breakdown = feesRes.data.breakdown;
       setFeeBreakdown(breakdown);
 
-      // Build set of paid fee IDs from completed payments
       const payments = historyRes.data.payments || [];
       const paidFees = new Set();
       payments.forEach((payment) => {
@@ -52,11 +55,22 @@ export default function PaymentScreen({ navigation }) {
       Alert.alert("Error", "Failed to load fee information");
     } finally {
       setFetching(false);
+      setRefreshing(false);
     }
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, []),
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+  };
+
   const toggleFee = (feeId, amount) => {
-    // Do nothing if fee is already paid
     if (paidFeeIds.has(feeId)) return;
 
     setSelectedFees((prev) => {
@@ -171,12 +185,10 @@ export default function PaymentScreen({ navigation }) {
     }, 5000);
   };
 
-  // Render a single fee item
   const renderFeeItem = (fee, categoryColor = "#0f3c91") => {
     const isSelected = !!selectedFees[fee.id];
-    const isPaid = paidFeeIds.has(fee.id); // 👈 check if already paid
+    const isPaid = paidFeeIds.has(fee.id);
 
-    // If paid, show a read-only version without checkbox
     if (isPaid) {
       return (
         <View key={fee.id} style={[styles.feeItem, styles.feeItemPaid]}>
@@ -191,12 +203,12 @@ export default function PaymentScreen({ navigation }) {
       );
     }
 
-    // Otherwise, selectable with checkbox
     return (
       <TouchableOpacity
         key={fee.id}
         style={[styles.feeItem, isSelected && styles.feeItemSelected]}
         onPress={() => toggleFee(fee.id, parseFloat(fee.amount))}
+        activeOpacity={0.7}
       >
         <View style={styles.feeInfo}>
           <Text style={styles.feeName}>{fee.name}</Text>
@@ -207,7 +219,7 @@ export default function PaymentScreen({ navigation }) {
         <Ionicons
           name={isSelected ? "checkbox" : "square-outline"}
           size={24}
-          color={isSelected ? categoryColor : "#999"}
+          color={isSelected ? categoryColor : "#94a3b8"}
         />
       </TouchableOpacity>
     );
@@ -230,18 +242,42 @@ export default function PaymentScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
+      <LinearGradient
+        colors={["#0f3c91", "#1a4da8"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Pay Fees</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#0f3c91"
+          />
+        }
+      >
         <View style={styles.iconContainer}>
           <Ionicons name="card" size={80} color="#0f3c91" />
         </View>
-        <Text style={styles.title}>Pay School Fees</Text>
+        <Text style={styles.title}>School Fees</Text>
         <Text style={styles.subtitle}>Select the fees you want to pay</Text>
 
         {hasFees ? (
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
+          <View style={styles.feesContainer}>
             {/* Tuition Fees */}
             {feeBreakdown?.tuition?.fees?.length > 0 && (
               <View style={styles.section}>
@@ -271,7 +307,7 @@ export default function PaymentScreen({ navigation }) {
                 )}
               </View>
             )}
-          </ScrollView>
+          </View>
         ) : (
           <View style={styles.emptyContainer}>
             <Ionicons name="alert-circle-outline" size={60} color="#94a3b8" />
@@ -279,34 +315,37 @@ export default function PaymentScreen({ navigation }) {
           </View>
         )}
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total Selected:</Text>
-            <Text style={styles.totalAmount}>
-              ₱{selectedTotal.toLocaleString()}
-            </Text>
-          </View>
+        {/* Spacer for footer */}
+        <View style={{ height: 100 }} />
+      </ScrollView>
 
-          <TouchableOpacity
-            style={[
-              styles.payButton,
-              (loading || checkingStatus || selectedTotal === 0) &&
-                styles.payButtonDisabled,
-            ]}
-            onPress={handlePayment}
-            disabled={loading || checkingStatus || selectedTotal === 0}
-          >
-            {loading || checkingStatus ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="wallet" size={24} color="#fff" />
-                <Text style={styles.payButtonText}>Pay with GCash</Text>
-              </>
-            )}
-          </TouchableOpacity>
+      {/* Footer */}
+      <View style={styles.footer}>
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>Total to pay:</Text>
+          <Text style={styles.totalAmount}>
+            ₱{selectedTotal.toLocaleString()}
+          </Text>
         </View>
+
+        <TouchableOpacity
+          style={[
+            styles.payButton,
+            (loading || checkingStatus || selectedTotal === 0) &&
+              styles.payButtonDisabled,
+          ]}
+          onPress={handlePayment}
+          disabled={loading || checkingStatus || selectedTotal === 0}
+        >
+          {loading || checkingStatus ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="wallet-outline" size={24} color="#fff" />
+              <Text style={styles.payButtonText}>Pay with GCash</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -315,16 +354,46 @@ export default function PaymentScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f0f2f5",
+    backgroundColor: "#f8fafc",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
+  headerGradient: {
+    paddingTop: 60,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    elevation: 8,
+    shadowColor: "#0f3c91",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#fff",
+  },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingTop: 20,
   },
   iconContainer: {
@@ -343,17 +412,17 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: "#64748b",
   },
-  scrollContent: {
+  feesContainer: {
     paddingBottom: 20,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: "#0f3c91",
-    marginBottom: 10,
+    marginBottom: 12,
     paddingHorizontal: 4,
   },
   feeItem: {
@@ -365,12 +434,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#f1f5f9",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.02,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   feeItemSelected: {
     backgroundColor: "#f8fafc",
@@ -378,10 +447,9 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   feeItemPaid: {
-    backgroundColor: "#f0fdf4", // light green background
+    backgroundColor: "#f0fdf4",
     borderColor: "#4caf50",
     borderWidth: 1,
-    opacity: 0.9,
   },
   feeInfo: {
     flex: 1,
@@ -398,24 +466,30 @@ const styles = StyleSheet.create({
     color: "#0f3c91",
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
     alignItems: "center",
-    marginTop: 100,
+    justifyContent: "center",
+    paddingVertical: 60,
   },
   emptyText: {
+    marginTop: 16,
     fontSize: 16,
     color: "#94a3b8",
-    marginTop: 12,
-    textAlign: "center",
   },
   footer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    paddingHorizontal: 20,
     paddingVertical: 16,
     borderTopWidth: 1,
     borderTopColor: "#e2e8f0",
-    backgroundColor: "#fff",
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 8,
   },
   totalRow: {
     flexDirection: "row",
@@ -428,7 +502,7 @@ const styles = StyleSheet.create({
     color: "#475569",
   },
   totalAmount: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "bold",
     color: "#0f3c91",
   },
@@ -437,22 +511,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    padding: 18,
+    padding: 16,
     borderRadius: 30,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    gap: 8,
   },
   payButtonDisabled: {
-    backgroundColor: "#a0aec0",
+    backgroundColor: "#94a3b8",
     opacity: 0.6,
   },
   payButtonText: {
     color: "#fff",
     fontSize: 18,
-    fontWeight: "bold",
-    marginLeft: 10,
+    fontWeight: "600",
   },
 });

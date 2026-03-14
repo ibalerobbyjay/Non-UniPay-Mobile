@@ -420,7 +420,12 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
   );
 };
 
-export default function PaymentHistoryScreen() {
+export default function PaymentHistoryScreen({ navigation }) {
+  // Hide the navigation header
+  useEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
+
   const [groupedPayments, setGroupedPayments] = useState([]);
   const [totalPaid, setTotalPaid] = useState(0);
   const [totalPending, setTotalPending] = useState(0);
@@ -589,11 +594,11 @@ export default function PaymentHistoryScreen() {
         </View>
         <View style={styles.paymentDetails}>
           <View style={styles.detailRow}>
-            <Ionicons name="receipt-outline" size={16} color="#666" />
+            <Ionicons name="receipt-outline" size={16} color="#64748b" />
             <Text style={styles.detailText}>{displayReference}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Ionicons name="calendar-outline" size={16} color="#666" />
+            <Ionicons name="calendar-outline" size={16} color="#64748b" />
             <Text style={styles.detailText}>
               {new Date(item.created_at).toLocaleDateString("en-US", {
                 year: "numeric",
@@ -604,7 +609,7 @@ export default function PaymentHistoryScreen() {
           </View>
           {item.payment_date && (
             <View style={styles.detailRow}>
-              <Ionicons name="time-outline" size={16} color="#666" />
+              <Ionicons name="time-outline" size={16} color="#64748b" />
               <Text style={styles.detailText}>
                 Paid: {new Date(item.payment_date).toLocaleString()}
               </Text>
@@ -642,36 +647,52 @@ export default function PaymentHistoryScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Custom Header */}
       <LinearGradient
         colors={["#0f3c91", "#1a4da8"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.summaryCard}
+        style={styles.headerGradient}
       >
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryColumn}>
-            <Text style={styles.summaryLabel}>Total Paid</Text>
-            <Text style={styles.summaryAmount}>
-              ₱{totalPaid.toLocaleString()}
-            </Text>
-            <Text style={styles.summarySubtext}>
-              {paidCount} transaction{paidCount !== 1 ? "s" : ""}
-            </Text>
-          </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryColumn}>
-            <Text style={styles.summaryLabel}>Pending</Text>
-            <Text
-              style={[styles.summaryAmount, { color: "rgb(244, 180, 20)" }]}
-            >
-              ₱{totalPending.toLocaleString()}
-            </Text>
-            <Text style={styles.summarySubtext}>
-              {pendingCount} transaction{pendingCount !== 1 ? "s" : ""}
-            </Text>
-          </View>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Payment History</Text>
+          <View style={{ width: 40 }} />
         </View>
       </LinearGradient>
+
+      {/* Summary Cards */}
+      <View style={styles.summaryContainer}>
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryIconContainer}>
+            <Ionicons name="checkmark-circle" size={24} color="#4caf50" />
+          </View>
+          <Text style={styles.summaryLabel}>Total Paid</Text>
+          <Text style={styles.summaryAmount}>
+            ₱{Math.round(totalPaid).toLocaleString()}
+          </Text>
+          <Text style={styles.summarySubtext}>
+            {paidCount} transaction{paidCount !== 1 ? "s" : ""}
+          </Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryIconContainer}>
+            <Ionicons name="time" size={24} color="rgb(244,180,20)" />
+          </View>
+          <Text style={styles.summaryLabel}>Pending</Text>
+          <Text style={[styles.summaryAmount, { color: "rgb(244,180,20)" }]}>
+            ₱{Math.round(totalPending).toLocaleString()}
+          </Text>
+          <Text style={styles.summarySubtext}>
+            {pendingCount} transaction{pendingCount !== 1 ? "s" : ""}
+          </Text>
+        </View>
+      </View>
 
       <FlatList
         data={groupedPayments}
@@ -687,7 +708,7 @@ export default function PaymentHistoryScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="receipt-outline" size={80} color="#ccc" />
+            <Ionicons name="receipt-outline" size={80} color="#cbd5e1" />
             <Text style={styles.emptyText}>No payment history</Text>
           </View>
         }
@@ -706,60 +727,117 @@ export default function PaymentHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Main screen styles (from original)
-  container: { flex: 1, backgroundColor: "#f0f2f5" },
+  // Main container
+  container: { flex: 1, backgroundColor: "#f8fafc" },
+
+  // Loading
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  summaryCard: {
-    paddingVertical: 20,
+
+  // Header
+  headerGradient: {
+    paddingTop: 60,
+    paddingBottom: 20,
     paddingHorizontal: 16,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     elevation: 8,
-    shadowColor: "#000",
+    shadowColor: "#0f3c91",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
   },
-  summaryRow: {
+  headerRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
     alignItems: "center",
   },
-  summaryColumn: { flex: 1, alignItems: "center" },
-  summaryDivider: {
-    width: 1,
-    height: "80%",
-    backgroundColor: "rgba(255,255,255,0.3)",
-    marginHorizontal: 10,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.9)",
-    fontWeight: "500",
-    marginBottom: 4,
-  },
-  summaryAmount: {
+  headerTitle: {
     fontSize: 24,
     fontWeight: "bold",
     color: "#fff",
+  },
+
+  // Summary Cards
+  summaryContainer: {
+    flexDirection: "row",
+    marginTop: -20,
+    marginHorizontal: 20,
+    gap: 12,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+    alignItems: "center",
+  },
+  summaryIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#f8fafc",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: "#64748b",
+    marginBottom: 4,
+  },
+  summaryAmount: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#0f3c91",
     marginBottom: 2,
   },
-  summarySubtext: { fontSize: 12, color: "rgba(255,255,255,0.7)" },
+  summarySubtext: {
+    fontSize: 12,
+    color: "#94a3b8",
+  },
+
+  // List
   listContainer: { padding: 16, paddingTop: 8 },
+
+  // Semester header
   semesterHeader: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(15, 60, 145, 0.08)",
+    backgroundColor: "#fff",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 12,
     marginBottom: 8,
     marginTop: 8,
     gap: 8,
     borderLeftWidth: 4,
     borderLeftColor: "#0f3c91",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
   },
   semesterHeaderText: { fontSize: 14, fontWeight: "700", color: "#0f3c91" },
+
+  // Payment card
   paymentCard: {
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -767,11 +845,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: "#f1f5f9",
   },
   paymentHeader: {
     flexDirection: "row",
@@ -790,11 +868,11 @@ const styles = StyleSheet.create({
   paymentAmount: { fontSize: 20, fontWeight: "bold", color: "#0f3c91" },
   paymentDetails: {
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopColor: "#f1f5f9",
     paddingTop: 12,
   },
   detailRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
-  detailText: { fontSize: 14, color: "#64748b", marginLeft: 8 },
+  detailText: { fontSize: 14, color: "#64748b", marginLeft: 8, flex: 1 },
   viewReceiptBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -812,10 +890,12 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 15,
   },
-  emptyContainer: { alignItems: "center", marginTop: 100 },
-  emptyText: { fontSize: 18, color: "#999", marginTop: 20 },
 
-  // Modal styles (simplified version)
+  // Empty state
+  emptyContainer: { alignItems: "center", marginTop: 100 },
+  emptyText: { fontSize: 18, color: "#94a3b8", marginTop: 20 },
+
+  // Modal styles (unchanged)
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
