@@ -14,7 +14,6 @@ import { AuthContext } from "../contexts/AuthContext";
 import api from "../services/api";
 
 export default function ClearanceScreen({ navigation }) {
-  // Hide the navigation header
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
@@ -67,7 +66,6 @@ export default function ClearanceScreen({ navigation }) {
 
   const isCleared = clearance?.status === "cleared";
 
-  // Check if any fees exist
   const hasFees =
     [
       ...(breakdown?.tuition?.fees || []),
@@ -75,7 +73,6 @@ export default function ClearanceScreen({ navigation }) {
       ...(breakdown?.exam?.fees || []),
     ].length > 0;
 
-  // Determine card appearance based on fees existence and clearance status
   let statusIcon = "help-circle";
   let iconColor = "#94a3b8";
   let statusText = "";
@@ -102,7 +99,6 @@ export default function ClearanceScreen({ navigation }) {
     statusMessage = "Please settle your fees to get clearance";
   }
 
-  // Extract school year and semester from breakdown (assuming all fees share same)
   const firstFee =
     breakdown?.tuition?.fees?.[0] ||
     breakdown?.miscellaneous?.fees?.[0] ||
@@ -148,7 +144,6 @@ export default function ClearanceScreen({ navigation }) {
       <View style={styles.detailsCard}>
         <Text style={styles.detailsTitle}>Clearance Details</Text>
 
-        {/* Student Name */}
         <View style={styles.detailRow}>
           <Ionicons name="person-outline" size={22} color="#0f3c91" />
           <View style={styles.detailTextContainer}>
@@ -157,7 +152,6 @@ export default function ClearanceScreen({ navigation }) {
           </View>
         </View>
 
-        {/* School Year */}
         <View style={styles.detailRow}>
           <Ionicons name="calendar-outline" size={22} color="#0f3c91" />
           <View style={styles.detailTextContainer}>
@@ -166,7 +160,6 @@ export default function ClearanceScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Semester */}
         <View style={styles.detailRow}>
           <Ionicons name="book-outline" size={22} color="#0f3c91" />
           <View style={styles.detailTextContainer}>
@@ -175,7 +168,6 @@ export default function ClearanceScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Current Exam Period (from admin) */}
         {currentExamPeriod && (
           <View style={styles.detailRow}>
             <Ionicons name="timer-outline" size={22} color="#0f3c91" />
@@ -186,7 +178,6 @@ export default function ClearanceScreen({ navigation }) {
           </View>
         )}
 
-        {/* Cleared Date (if available) */}
         {clearance?.cleared_at && (
           <View style={styles.detailRow}>
             <Ionicons name="checkmark-done-outline" size={22} color="#4caf50" />
@@ -200,20 +191,101 @@ export default function ClearanceScreen({ navigation }) {
         )}
       </View>
 
-      {/* Note Card (shown only if pending with fees) */}
+      {/* ── Note Card: Pending ── */}
       {hasFees && !isCleared && (
-        <View style={styles.noteCard}>
-          <Ionicons
-            name="information-circle"
-            size={28}
-            color="rgb(244, 180, 20)"
-          />
-          <Text style={styles.noteText}>
-            To get your clearance, please pay your school fees through the
-            Payment section.
-          </Text>
+        <View
+          style={[
+            styles.noteCard,
+            { borderColor: "rgb(244, 180, 20)", backgroundColor: "#fffbeb" },
+          ]}
+        >
+          <View style={[styles.noteIconWrap, { backgroundColor: "#fef3c7" }]}>
+            <Ionicons name="warning" size={20} color="rgb(244, 180, 20)" />
+          </View>
+          <View style={styles.noteBody}>
+            <Text style={[styles.noteTitle, { color: "#92400e" }]}>
+              Action Required
+            </Text>
+            <Text style={[styles.noteText, { color: "#92400e" }]}>
+              To get your clearance, please pay your school fees through the
+              Payment section.
+            </Text>
+            {breakdown?.remaining_balance > 0 && (
+              <View style={[styles.notePill, { backgroundColor: "#fde68a" }]}>
+                <Ionicons name="cash-outline" size={13} color="#92400e" />
+                <Text style={[styles.notePillText, { color: "#92400e" }]}>
+                  Remaining Balance: ₱
+                  {Number(breakdown.remaining_balance).toLocaleString("en-PH", {
+                    minimumFractionDigits: 2,
+                  })}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       )}
+
+      {/* ── Note Card: Cleared ── */}
+      {hasFees && isCleared && (
+        <View
+          style={[
+            styles.noteCard,
+            { borderColor: "#86efac", backgroundColor: "#f0fdf4" },
+          ]}
+        >
+          <View style={[styles.noteIconWrap, { backgroundColor: "#dcfce7" }]}>
+            <Ionicons name="shield-checkmark" size={20} color="#16a34a" />
+          </View>
+          <View style={styles.noteBody}>
+            <Text style={[styles.noteTitle, { color: "#15803d" }]}>
+              You're All Set!
+            </Text>
+            <Text style={[styles.noteText, { color: "#166534" }]}>
+              Your fees are fully settled. You are officially cleared to take
+              your examinations this semester.
+            </Text>
+            {clearance?.cleared_at && (
+              <View style={[styles.notePill, { backgroundColor: "#bbf7d0" }]}>
+                <Ionicons name="checkmark-circle" size={13} color="#15803d" />
+                <Text style={[styles.notePillText, { color: "#15803d" }]}>
+                  Cleared on{" "}
+                  {new Date(clearance.cleared_at).toLocaleDateString("en-PH", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* ── Note Card: No Fees ── */}
+      {!hasFees && (
+        <View
+          style={[
+            styles.noteCard,
+            { borderColor: "#cbd5e1", backgroundColor: "#f8fafc" },
+          ]}
+        >
+          <View style={[styles.noteIconWrap, { backgroundColor: "#f1f5f9" }]}>
+            <Ionicons name="receipt-outline" size={20} color="#64748b" />
+          </View>
+          <View style={styles.noteBody}>
+            <Text style={[styles.noteTitle, { color: "#475569" }]}>
+              No Fees Assigned
+            </Text>
+            <Text style={[styles.noteText, { color: "#64748b" }]}>
+              No fees have been set for your course this semester. If you
+              believe this is an error, please contact the Cashier's Office or
+              your school administrator.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      <View style={{ height: 30 }} />
     </ScrollView>
   );
 }
@@ -326,29 +398,58 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1e293b",
   },
+
+  // ── Note cards ──
   noteCard: {
-    backgroundColor: "#fffbeb",
     marginHorizontal: 20,
-    marginTop: 15,
-    marginBottom: 25,
+    marginTop: 16,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     borderWidth: 1,
-    borderColor: "rgb(244, 180, 20)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
+    gap: 12,
+  },
+  noteIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    flexShrink: 0,
+    marginTop: 1,
+  },
+  noteBody: {
+    flex: 1,
+    gap: 6,
+  },
+  noteTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 2,
   },
   noteText: {
-    flex: 1,
-    marginLeft: 12,
     fontSize: 14,
-    color: "#92400e",
-    fontWeight: "500",
     lineHeight: 20,
+    fontWeight: "400",
+  },
+  notePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginTop: 6,
+    gap: 5,
+  },
+  notePillText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
 });

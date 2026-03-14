@@ -12,9 +12,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#667eea"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nonunipay.mobile"
@@ -27,7 +25,7 @@
       "package": "com.nonunipay.mobile"
     },
     "web": {
-      "favicon": "./assets/trinidad_logo.png"
+      "favicon": "./assets/logo.png"
     },
     "plugins": [
       "expo-font",
