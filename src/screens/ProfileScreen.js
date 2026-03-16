@@ -14,17 +14,19 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
 
 const COURSES = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
 const YEAR_LEVELS = ["1", "2", "3", "4"];
-const SUPPORT_EMAIL = "nonunipay@gmail.com"; // ← change this
+const SUPPORT_EMAIL = "nonunipay@gmail.com";
 
 // ─── Password strength helper ────────────────────────────────────────────────
 function getPasswordStrength(pw) {
@@ -42,10 +44,7 @@ function getPasswordStrength(pw) {
 
 // ─── Privacy Policy content ──────────────────────────────────────────────────
 const PRIVACY_CONTENT = [
-  {
-    heading: null,
-    body: "Last updated: January 1, 2026",
-  },
+  { heading: null, body: "Last updated: January 1, 2026" },
   {
     heading: "1. INFORMATION WE COLLECT",
     body: "We collect information you provide directly to us, such as your name, student number, email address, contact number, course, and year level. We may also collect a profile photo if you choose to upload one.",
@@ -85,10 +84,7 @@ const PRIVACY_CONTENT = [
 ];
 
 const TERMS_CONTENT = [
-  {
-    heading: null,
-    body: "Last updated: January 1, 2025",
-  },
+  { heading: null, body: "Last updated: January 1, 2025" },
   {
     heading: "1. ACCEPTANCE OF TERMS",
     body: "By using the Student Portal, you agree to be bound by these Terms of Service. If you do not agree, please discontinue use immediately.",
@@ -133,6 +129,8 @@ const TERMS_CONTENT = [
 
 // ─── Reusable Legal Modal ────────────────────────────────────────────────────
 function LegalModal({ visible, onClose, title, sections }) {
+  const { colors } = useTheme();
+
   return (
     <Modal
       visible={visible}
@@ -141,11 +139,11 @@ function LegalModal({ visible, onClose, title, sections }) {
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={modalStyles.overlay}>
-        <View style={modalStyles.sheet}>
+      <View style={[modalStyles.overlay, { backgroundColor: colors.overlay }]}>
+        <View style={[modalStyles.sheet, { backgroundColor: colors.surface }]}>
           {/* Header */}
           <LinearGradient
-            colors={["#0f3c91", "#1a4da8"]}
+            colors={[colors.gradientStart, colors.gradientEnd]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={modalStyles.header}
@@ -165,17 +163,37 @@ function LegalModal({ visible, onClose, title, sections }) {
             {sections.map((section, i) => (
               <View key={i} style={modalStyles.sectionBlock}>
                 {section.heading && (
-                  <Text style={modalStyles.heading}>{section.heading}</Text>
+                  <Text style={[modalStyles.heading, { color: colors.brand }]}>
+                    {section.heading}
+                  </Text>
                 )}
-                <Text style={modalStyles.paragraph}>{section.body}</Text>
+                <Text
+                  style={[
+                    modalStyles.paragraph,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  {section.body}
+                </Text>
               </View>
             ))}
           </ScrollView>
 
           {/* Footer close button */}
-          <View style={modalStyles.footer}>
+          <View
+            style={[
+              modalStyles.footer,
+              {
+                borderTopColor: colors.border,
+                backgroundColor: colors.surface,
+              },
+            ]}
+          >
             <TouchableOpacity
-              style={modalStyles.closeFooterBtn}
+              style={[
+                modalStyles.closeFooterBtn,
+                { backgroundColor: colors.brand },
+              ]}
               onPress={onClose}
             >
               <Text style={modalStyles.closeFooterText}>Close</Text>
@@ -194,6 +212,8 @@ export default function ProfileScreen({ navigation }) {
   }, [navigation]);
 
   const { user, logout } = useContext(AuthContext);
+  const { isDark, toggleTheme, colors } = useTheme();
+
   const [profile, setProfile] = useState(null);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -381,7 +401,6 @@ export default function ProfileScreen({ navigation }) {
       );
       return;
     }
-
     setPasswordLoading(true);
     try {
       await api.put("/student/change-password", {
@@ -441,21 +460,24 @@ export default function ProfileScreen({ navigation }) {
 
   const strength = getPasswordStrength(passwordForm.new_password);
 
+  // ─── Dynamic styles based on theme ────────────────────────────────────────
+  const s = makeStyles(colors);
+
   return (
     <>
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#0f3c91"
+            tintColor={colors.brand}
           />
         }
       >
         {/* Header */}
         <LinearGradient
-          colors={["#0f3c91", "#1a4da8"]}
+          colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -493,7 +515,9 @@ export default function ProfileScreen({ navigation }) {
               </View>
             </TouchableOpacity>
             <Text style={styles.name}>{user?.name}</Text>
-            <Text style={styles.email}>{formData.email || user?.email}</Text>
+            <Text style={styles.headerEmail}>
+              {formData.email || user?.email}
+            </Text>
             {pictureCooldown && (
               <Text style={styles.pictureCooldownText}>{pictureCooldown}</Text>
             )}
@@ -502,96 +526,128 @@ export default function ProfileScreen({ navigation }) {
 
         <View style={styles.content}>
           {/* Student Information */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Student Information</Text>
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>Student Information</Text>
               {!editing &&
                 (cooldownMessage ? (
                   <Ionicons
                     name="lock-closed-outline"
                     size={24}
-                    color="#94a3b8"
+                    color={colors.textMuted}
                   />
                 ) : (
                   <TouchableOpacity onPress={() => setEditing(true)}>
-                    <Ionicons name="create-outline" size={24} color="#0f3c91" />
+                    <Ionicons
+                      name="create-outline"
+                      size={24}
+                      color={colors.brand}
+                    />
                   </TouchableOpacity>
                 ))}
             </View>
 
             {cooldownMessage && !editing && (
-              <View style={styles.cooldownBanner}>
-                <Ionicons name="time-outline" size={18} color="#b26a00" />
-                <Text style={styles.cooldownText}>{cooldownMessage}</Text>
+              <View style={[s.cooldownBanner]}>
+                <Ionicons
+                  name="time-outline"
+                  size={18}
+                  color={colors.warning}
+                />
+                <Text style={s.cooldownText}>{cooldownMessage}</Text>
               </View>
             )}
 
             {editing ? (
               <View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Email</Text>
+                <View style={s.inputGroup}>
+                  <Text style={s.inputLabel}>Email</Text>
                   <TextInput
-                    style={styles.input}
+                    style={s.input}
                     value={formData.email}
                     onChangeText={(t) => setFormData({ ...formData, email: t })}
                     autoCapitalize="none"
                     keyboardType="email-address"
+                    placeholderTextColor={colors.textMuted}
+                    color={colors.textPrimary}
                   />
                 </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Contact Number</Text>
+                <View style={s.inputGroup}>
+                  <Text style={s.inputLabel}>Contact Number</Text>
                   <TextInput
-                    style={styles.input}
+                    style={s.input}
                     value={formData.contact}
                     onChangeText={(t) =>
                       setFormData({ ...formData, contact: t })
                     }
                     keyboardType="phone-pad"
+                    placeholderTextColor={colors.textMuted}
+                    color={colors.textPrimary}
                   />
                 </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Course</Text>
-                  <View style={styles.pickerContainer}>
+                <View style={s.inputGroup}>
+                  <Text style={s.inputLabel}>Course</Text>
+                  <View style={s.pickerContainer}>
                     <Picker
                       selectedValue={formData.course}
                       onValueChange={(v) =>
                         setFormData({ ...formData, course: v })
                       }
-                      style={styles.picker}
+                      style={[s.picker, { color: colors.textPrimary }]}
+                      dropdownIconColor={colors.textSecondary}
                     >
-                      <Picker.Item label="Select Course" value="" />
+                      <Picker.Item
+                        label="Select Course"
+                        value=""
+                        color={colors.textMuted}
+                      />
                       {COURSES.map((c) => (
-                        <Picker.Item key={c} label={c} value={c} />
+                        <Picker.Item
+                          key={c}
+                          label={c}
+                          value={c}
+                          color={colors.textPrimary}
+                        />
                       ))}
                     </Picker>
                   </View>
                 </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Year Level</Text>
-                  <View style={styles.pickerContainer}>
+                <View style={s.inputGroup}>
+                  <Text style={s.inputLabel}>Year Level</Text>
+                  <View style={s.pickerContainer}>
                     <Picker
                       selectedValue={formData.year_level}
                       onValueChange={(v) =>
                         setFormData({ ...formData, year_level: v })
                       }
-                      style={styles.picker}
+                      style={[s.picker, { color: colors.textPrimary }]}
+                      dropdownIconColor={colors.textSecondary}
                     >
-                      <Picker.Item label="Select Year" value="" />
+                      <Picker.Item
+                        label="Select Year"
+                        value=""
+                        color={colors.textMuted}
+                      />
                       {YEAR_LEVELS.map((y) => (
-                        <Picker.Item key={y} label={`Year ${y}`} value={y} />
+                        <Picker.Item
+                          key={y}
+                          label={`Year ${y}`}
+                          value={y}
+                          color={colors.textPrimary}
+                        />
                       ))}
                     </Picker>
                   </View>
                 </View>
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
-                    style={[styles.button, styles.cancelButton]}
+                    style={[styles.button, s.cancelButton]}
                     onPress={() => setEditing(false)}
                   >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                    <Text style={s.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.button, styles.saveButton]}
+                    style={[styles.button, { backgroundColor: colors.brand }]}
                     onPress={handleUpdate}
                     disabled={loading}
                   >
@@ -615,12 +671,12 @@ export default function ProfileScreen({ navigation }) {
                   <View
                     key={label}
                     style={[
-                      styles.infoRow,
+                      s.infoRow,
                       i === arr.length - 1 && { borderBottomWidth: 0 },
                     ]}
                   >
-                    <Text style={styles.infoLabel}>{label}</Text>
-                    <Text style={styles.infoValue}>{value}</Text>
+                    <Text style={s.infoLabel}>{label}</Text>
+                    <Text style={s.infoValue}>{value}</Text>
                   </View>
                 ))}
               </View>
@@ -628,25 +684,27 @@ export default function ProfileScreen({ navigation }) {
           </View>
 
           {/* Account Security */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
               <View style={styles.sectionTitleRow}>
                 <View
-                  style={[styles.sectionIcon, { backgroundColor: "#eff6ff" }]}
+                  style={[
+                    styles.sectionIcon,
+                    { backgroundColor: colors.brandLight },
+                  ]}
                 >
                   <Ionicons
                     name="shield-checkmark-outline"
                     size={18}
-                    color="#0f3c91"
+                    color={colors.brand}
                   />
                 </View>
-                <Text style={styles.sectionTitle}>Account Security</Text>
+                <Text style={s.sectionTitle}>Account Security</Text>
               </View>
             </View>
 
-            {/* Change Password */}
             <TouchableOpacity
-              style={styles.actionRow}
+              style={s.actionRow}
               onPress={() => {
                 setChangingPassword(!changingPassword);
                 if (changingPassword)
@@ -658,24 +716,24 @@ export default function ProfileScreen({ navigation }) {
               }}
             >
               <View style={styles.actionRowLeft}>
-                <Ionicons name="key-outline" size={20} color="#0f3c91" />
-                <Text style={styles.actionRowText}>Change Password</Text>
+                <Ionicons name="key-outline" size={20} color={colors.brand} />
+                <Text style={s.actionRowText}>Change Password</Text>
               </View>
               <Ionicons
                 name={changingPassword ? "chevron-up" : "chevron-forward"}
                 size={18}
-                color="#94a3b8"
+                color={colors.textMuted}
               />
             </TouchableOpacity>
 
             {changingPassword && (
-              <View style={styles.passwordForm}>
+              <View style={s.passwordForm}>
                 {/* Current Password */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Current Password</Text>
-                  <View style={styles.passwordInputWrapper}>
+                <View style={s.inputGroup}>
+                  <Text style={s.inputLabel}>Current Password</Text>
+                  <View style={s.passwordInputWrapper}>
                     <TextInput
-                      style={styles.passwordInput}
+                      style={s.passwordInput}
                       value={passwordForm.current_password}
                       onChangeText={(t) =>
                         setPasswordForm({
@@ -685,7 +743,7 @@ export default function ProfileScreen({ navigation }) {
                       }
                       secureTextEntry={!showCurrentPw}
                       placeholder="Enter current password"
-                      placeholderTextColor="#cbd5e1"
+                      placeholderTextColor={colors.textMuted}
                       autoCapitalize="none"
                     />
                     <TouchableOpacity
@@ -695,25 +753,25 @@ export default function ProfileScreen({ navigation }) {
                       <Ionicons
                         name={showCurrentPw ? "eye-off-outline" : "eye-outline"}
                         size={20}
-                        color="#94a3b8"
+                        color={colors.textMuted}
                       />
                     </TouchableOpacity>
                   </View>
                 </View>
 
                 {/* New Password */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>New Password</Text>
-                  <View style={styles.passwordInputWrapper}>
+                <View style={s.inputGroup}>
+                  <Text style={s.inputLabel}>New Password</Text>
+                  <View style={s.passwordInputWrapper}>
                     <TextInput
-                      style={styles.passwordInput}
+                      style={s.passwordInput}
                       value={passwordForm.new_password}
                       onChangeText={(t) =>
                         setPasswordForm({ ...passwordForm, new_password: t })
                       }
                       secureTextEntry={!showNewPw}
                       placeholder="Min. 8 characters"
-                      placeholderTextColor="#cbd5e1"
+                      placeholderTextColor={colors.textMuted}
                       autoCapitalize="none"
                     />
                     <TouchableOpacity
@@ -723,7 +781,7 @@ export default function ProfileScreen({ navigation }) {
                       <Ionicons
                         name={showNewPw ? "eye-off-outline" : "eye-outline"}
                         size={20}
-                        color="#94a3b8"
+                        color={colors.textMuted}
                       />
                     </TouchableOpacity>
                   </View>
@@ -739,7 +797,7 @@ export default function ProfileScreen({ navigation }) {
                                 backgroundColor:
                                   i <= strength.score
                                     ? strength.color
-                                    : "#e2e8f0",
+                                    : colors.border,
                               },
                             ]}
                           />
@@ -758,11 +816,11 @@ export default function ProfileScreen({ navigation }) {
                 </View>
 
                 {/* Confirm Password */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Confirm New Password</Text>
+                <View style={s.inputGroup}>
+                  <Text style={s.inputLabel}>Confirm New Password</Text>
                   <View
                     style={[
-                      styles.passwordInputWrapper,
+                      s.passwordInputWrapper,
                       passwordForm.confirm_password.length > 0 && {
                         borderColor:
                           passwordForm.new_password ===
@@ -773,7 +831,7 @@ export default function ProfileScreen({ navigation }) {
                     ]}
                   >
                     <TextInput
-                      style={styles.passwordInput}
+                      style={s.passwordInput}
                       value={passwordForm.confirm_password}
                       onChangeText={(t) =>
                         setPasswordForm({
@@ -783,7 +841,7 @@ export default function ProfileScreen({ navigation }) {
                       }
                       secureTextEntry={!showConfirmPw}
                       placeholder="Re-enter new password"
-                      placeholderTextColor="#cbd5e1"
+                      placeholderTextColor={colors.textMuted}
                       autoCapitalize="none"
                     />
                     <TouchableOpacity
@@ -793,7 +851,7 @@ export default function ProfileScreen({ navigation }) {
                       <Ionicons
                         name={showConfirmPw ? "eye-off-outline" : "eye-outline"}
                         size={20}
-                        color="#94a3b8"
+                        color={colors.textMuted}
                       />
                     </TouchableOpacity>
                   </View>
@@ -808,7 +866,7 @@ export default function ProfileScreen({ navigation }) {
 
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
-                    style={[styles.button, styles.cancelButton]}
+                    style={[styles.button, s.cancelButton]}
                     onPress={() => {
                       setChangingPassword(false);
                       setPasswordForm({
@@ -818,12 +876,12 @@ export default function ProfileScreen({ navigation }) {
                       });
                     }}
                   >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                    <Text style={s.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
                       styles.button,
-                      styles.saveButton,
+                      { backgroundColor: colors.brand },
                       passwordLoading && { opacity: 0.7 },
                     ]}
                     onPress={handleChangePassword}
@@ -840,12 +898,59 @@ export default function ProfileScreen({ navigation }) {
             )}
           </View>
 
-          {/* Support & Legal */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
+          {/* Appearance */}
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
               <View style={styles.sectionTitleRow}>
                 <View
-                  style={[styles.sectionIcon, { backgroundColor: "#f0fdf4" }]}
+                  style={[
+                    styles.sectionIcon,
+                    { backgroundColor: isDark ? "#1e293b" : "#fef9c3" },
+                  ]}
+                >
+                  <Ionicons
+                    name={isDark ? "moon" : "sunny"}
+                    size={18}
+                    color={isDark ? "#818cf8" : "#f59e0b"}
+                  />
+                </View>
+                <Text style={s.sectionTitle}>Appearance</Text>
+              </View>
+            </View>
+
+            <View style={s.actionRow}>
+              <View style={styles.actionRowLeft}>
+                <Ionicons
+                  name={isDark ? "moon-outline" : "sunny-outline"}
+                  size={20}
+                  color={colors.brand}
+                />
+                <View>
+                  <Text style={s.actionRowText}>Dark Mode</Text>
+                  <Text style={s.actionRowSub}>
+                    {isDark ? "Dark theme enabled" : "Light theme enabled"}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{ false: colors.border, true: colors.brand }}
+                thumbColor={isDark ? "#fff" : "#fff"}
+                ios_backgroundColor={colors.border}
+              />
+            </View>
+          </View>
+
+          {/* Support & Legal */}
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <View
+                  style={[
+                    styles.sectionIcon,
+                    { backgroundColor: isDark ? "#14532d" : "#f0fdf4" },
+                  ]}
                 >
                   <Ionicons
                     name="help-circle-outline"
@@ -853,66 +958,84 @@ export default function ProfileScreen({ navigation }) {
                     color="#16a34a"
                   />
                 </View>
-                <Text style={styles.sectionTitle}>Support & Legal</Text>
+                <Text style={s.sectionTitle}>Support & Legal</Text>
               </View>
             </View>
 
             <TouchableOpacity
-              style={styles.actionRow}
+              style={s.actionRow}
               onPress={handleContactSupport}
             >
               <View style={styles.actionRowLeft}>
-                <Ionicons name="mail-outline" size={20} color="#0f3c91" />
+                <Ionicons name="mail-outline" size={20} color={colors.brand} />
                 <View>
-                  <Text style={styles.actionRowText}>Contact Support</Text>
-                  <Text style={styles.actionRowSub}>{SUPPORT_EMAIL}</Text>
+                  <Text style={s.actionRowText}>Contact Support</Text>
+                  <Text style={s.actionRowSub}>{SUPPORT_EMAIL}</Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textMuted}
+              />
             </TouchableOpacity>
 
-            <View style={styles.divider} />
+            <View style={s.divider} />
 
             <TouchableOpacity
-              style={styles.actionRow}
+              style={s.actionRow}
               onPress={() => setShowPrivacy(true)}
             >
               <View style={styles.actionRowLeft}>
                 <Ionicons
                   name="document-text-outline"
                   size={20}
-                  color="#0f3c91"
+                  color={colors.brand}
                 />
-                <Text style={styles.actionRowText}>Privacy Policy</Text>
+                <Text style={s.actionRowText}>Privacy Policy</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textMuted}
+              />
             </TouchableOpacity>
 
-            <View style={styles.divider} />
+            <View style={s.divider} />
 
             <TouchableOpacity
-              style={styles.actionRow}
+              style={s.actionRow}
               onPress={() => setShowTerms(true)}
             >
               <View style={styles.actionRowLeft}>
-                <Ionicons name="shield-outline" size={20} color="#0f3c91" />
-                <Text style={styles.actionRowText}>Terms of Service</Text>
+                <Ionicons
+                  name="shield-outline"
+                  size={20}
+                  color={colors.brand}
+                />
+                <Text style={s.actionRowText}>Terms of Service</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textMuted}
+              />
             </TouchableOpacity>
           </View>
 
           {/* Logout */}
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <TouchableOpacity style={[s.logoutButton]} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color="#f44336" />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
 
-          <Text style={styles.versionText}>Version 1.0.0 · Student Portal</Text>
+          <Text style={[styles.versionText, { color: colors.textMuted }]}>
+            Version 1.0.0 · Student Portal
+          </Text>
         </View>
       </ScrollView>
 
-      {/* Modals — rendered outside ScrollView so they're never clipped */}
+      {/* Modals */}
       <LegalModal
         visible={showPrivacy}
         onClose={() => setShowPrivacy(false)}
@@ -929,15 +1052,147 @@ export default function ProfileScreen({ navigation }) {
   );
 }
 
+// ─── Dynamic styles (theme-aware) ────────────────────────────────────────────
+function makeStyles(colors) {
+  return StyleSheet.create({
+    section: {
+      backgroundColor: colors.surface,
+      padding: 20,
+      borderRadius: 20,
+      marginBottom: 16,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
+      elevation: 4,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16,
+      paddingBottom: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    sectionTitle: { fontSize: 18, fontWeight: "700", color: colors.brand },
+    cooldownBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.cooldownBg,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 16,
+      gap: 8,
+      borderWidth: 1,
+      borderColor: colors.cooldownBorder,
+    },
+    cooldownText: { color: colors.cooldownText, fontSize: 13, flex: 1 },
+    infoRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    infoLabel: { fontSize: 15, color: colors.textSecondary },
+    infoValue: { fontSize: 15, fontWeight: "600", color: colors.textPrimary },
+    inputGroup: { marginBottom: 16 },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: "600",
+      marginBottom: 8,
+      color: colors.textSecondary,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 14,
+      fontSize: 16,
+      backgroundColor: colors.inputBackground,
+      color: colors.textPrimary,
+    },
+    pickerContainer: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.inputBackground,
+      overflow: "hidden",
+    },
+    picker: { height: 50, width: "100%" },
+    cancelButton: { backgroundColor: colors.borderLight },
+    cancelButtonText: {
+      color: colors.textSecondary,
+      fontWeight: "600",
+      fontSize: 16,
+    },
+    actionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 13,
+    },
+    actionRowText: {
+      fontSize: 15,
+      color: colors.textPrimary,
+      fontWeight: "500",
+    },
+    actionRowSub: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
+    divider: {
+      height: 1,
+      backgroundColor: colors.borderLight,
+      marginVertical: 2,
+    },
+    passwordForm: {
+      marginTop: 12,
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 8,
+    },
+    passwordInputWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      paddingRight: 4,
+    },
+    passwordInput: {
+      flex: 1,
+      padding: 14,
+      fontSize: 15,
+      color: colors.textPrimary,
+    },
+    logoutButton: {
+      backgroundColor: colors.surface,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+      borderRadius: 30,
+      borderWidth: 1,
+      borderColor: "#f44336",
+      elevation: 4,
+      gap: 8,
+      marginBottom: 12,
+    },
+  });
+}
+
 // ─── Modal Styles ─────────────────────────────────────────────────────────────
 const modalStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: "#fff",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     height: "88%",
@@ -950,12 +1205,7 @@ const modalStyles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 18,
   },
-  headerTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-    flex: 1,
-  },
+  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "700", flex: 1 },
   closeBtn: {
     width: 36,
     height: 36,
@@ -964,51 +1214,28 @@ const modalStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  body: {
-    flex: 1,
-  },
-  bodyContent: {
-    padding: 22,
-    paddingBottom: 16,
-  },
-  sectionBlock: {
-    marginBottom: 16,
-  },
+  body: { flex: 1 },
+  bodyContent: { padding: 22, paddingBottom: 16 },
+  sectionBlock: { marginBottom: 16 },
   heading: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0f3c91",
     marginBottom: 6,
     letterSpacing: 0.4,
   },
-  paragraph: {
-    fontSize: 14,
-    color: "#475569",
-    lineHeight: 22,
-  },
+  paragraph: { fontSize: 14, lineHeight: 22 },
   footer: {
     padding: 16,
     paddingBottom: Platform.OS === "ios" ? 32 : 16,
     borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    backgroundColor: "#fff",
   },
-  closeFooterBtn: {
-    backgroundColor: "#0f3c91",
-    borderRadius: 30,
-    padding: 16,
-    alignItems: "center",
-  },
-  closeFooterText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
+  closeFooterBtn: { borderRadius: 30, padding: 16, alignItems: "center" },
+  closeFooterText: { color: "#fff", fontWeight: "700", fontSize: 16 },
 });
 
-// ─── Screen Styles ────────────────────────────────────────────────────────────
+// ─── Static Styles ────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8fafc" },
+  container: { flex: 1 },
   headerGradient: {
     paddingTop: 60,
     paddingBottom: 30,
@@ -1056,7 +1283,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   name: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 4 },
-  email: { fontSize: 16, color: "rgba(255,255,255,0.9)" },
+  headerEmail: { fontSize: 16, color: "rgba(255,255,255,0.9)" },
   pictureCooldownText: {
     fontSize: 12,
     color: "rgba(255,255,255,0.6)",
@@ -1065,28 +1292,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   content: { padding: 20 },
-  section: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 20,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: "#f1f5f9",
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-  },
   sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   sectionIcon: {
     width: 32,
@@ -1095,51 +1300,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  sectionTitle: { fontSize: 18, fontWeight: "700", color: "#0f3c91" },
-  cooldownBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fffbeb",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: "rgb(244, 180, 20)",
-  },
-  cooldownText: { color: "#92400e", fontSize: 13, flex: 1 },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f8fafc",
-  },
-  infoLabel: { fontSize: 15, color: "#64748b" },
-  infoValue: { fontSize: 15, fontWeight: "600", color: "#1e293b" },
-  inputGroup: { marginBottom: 16 },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-    color: "#475569",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    backgroundColor: "#f8fafc",
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
-    backgroundColor: "#f8fafc",
-    overflow: "hidden",
-  },
-  picker: { height: 50, width: "100%" },
   buttonRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1147,39 +1307,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   button: { flex: 1, padding: 14, borderRadius: 30, alignItems: "center" },
-  cancelButton: { backgroundColor: "#f1f5f9" },
-  saveButton: { backgroundColor: "#0f3c91" },
-  cancelButtonText: { color: "#475569", fontWeight: "600", fontSize: 16 },
   saveButtonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
-  actionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 13,
-  },
   actionRowLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  actionRowText: { fontSize: 15, color: "#1e293b", fontWeight: "500" },
-  actionRowSub: { fontSize: 12, color: "#94a3b8", marginTop: 1 },
-  divider: { height: 1, backgroundColor: "#f1f5f9", marginVertical: 2 },
-  passwordForm: {
-    marginTop: 12,
-    backgroundColor: "#f8fafc",
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    marginBottom: 8,
-  },
-  passwordInputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    paddingRight: 4,
-  },
-  passwordInput: { flex: 1, padding: 14, fontSize: 15, color: "#1e293b" },
   eyeBtn: { padding: 10 },
   strengthRow: {
     flexDirection: "row",
@@ -1196,24 +1325,9 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   matchError: { fontSize: 12, color: "#ef4444", marginTop: 5, marginLeft: 2 },
-  logoutButton: {
-    backgroundColor: "#fff",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: "#f44336",
-    elevation: 4,
-    gap: 8,
-    marginBottom: 12,
-  },
   logoutText: { color: "#f44336", fontSize: 16, fontWeight: "600" },
-
   versionText: {
     textAlign: "center",
-    color: "#cbd5e1",
     fontSize: 12,
     marginBottom: 30,
     marginTop: 4,

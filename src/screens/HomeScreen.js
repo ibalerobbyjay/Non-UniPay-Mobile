@@ -13,15 +13,17 @@ import {
   View,
 } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
 
 export default function HomeScreen({ navigation }) {
-  // Hide the navigation header
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
   const { user } = useContext(AuthContext);
+  const { colors } = useTheme();
+
   const [profile, setProfile] = useState(null);
   const [clearance, setClearance] = useState(null);
   const [breakdown, setBreakdown] = useState(null);
@@ -29,8 +31,6 @@ export default function HomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const route = useRoute();
-
-  // Refs and state for auto‑scrolling summary cards
   const scrollViewRef = useRef(null);
   const [scrollViewWidth, setScrollViewWidth] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
@@ -44,7 +44,6 @@ export default function HomeScreen({ navigation }) {
           api.get("/fees/breakdown"),
           api.get("/notifications/unread-count"),
         ]);
-
       setProfile(profileRes.data);
       setClearance(clearanceRes.data);
       setBreakdown(breakdownRes.data.breakdown);
@@ -59,14 +58,12 @@ export default function HomeScreen({ navigation }) {
       loadData();
     }, [loadData]),
   );
-
   useFocusEffect(
     useCallback(() => {
       const interval = setInterval(loadData, 5000);
       return () => clearInterval(interval);
     }, [loadData]),
   );
-
   useFocusEffect(
     useCallback(() => {
       if (route.params?.paymentSuccess) {
@@ -97,8 +94,7 @@ export default function HomeScreen({ navigation }) {
     : 0;
 
   let feeStatusText = "";
-  let feeStatusColor = "#64748b";
-
+  let feeStatusColor = colors.textSecondary;
   if (!hasFees) {
     feeStatusText = "No fees available";
     feeStatusColor = "#f97316";
@@ -107,79 +103,57 @@ export default function HomeScreen({ navigation }) {
     feeStatusColor = "#4caf50";
   } else {
     feeStatusText = `₱${remainingBalance.toLocaleString()} remaining`;
-    feeStatusColor = "#64748b";
+    feeStatusColor = colors.textSecondary;
   }
 
-  // Auto‑scroll effect for the summary cards (slower, full traversal)
-  // Auto‑scroll effect with a 1‑second pause at each end
   useEffect(() => {
     if (contentWidth === 0 || scrollViewWidth === 0) return;
     const maxOffset = contentWidth - scrollViewWidth;
     if (maxOffset <= 0) return;
-
-    let direction = 1; // 1 = moving right, -1 = moving left
-    let currentOffset = 0;
-    let timeoutId;
-
-    const step = 5; // pixels per move (smaller = slower)
-    const moveDelay = 50; // ms between moves (smaller = faster)
-    const pauseDelay = 1000; // 1 second pause at ends
-
+    let direction = 1,
+      currentOffset = 0,
+      timeoutId;
+    const step = 5,
+      moveDelay = 50,
+      pauseDelay = 1000;
     const move = () => {
-      // Calculate next position
       let nextOffset = currentOffset + direction * step;
-
-      // Check if we hit an edge
       if (nextOffset >= maxOffset) {
         nextOffset = maxOffset;
-        // Pause at the end, then reverse direction
         timeoutId = setTimeout(() => {
           direction = -1;
-          move(); // continue moving after pause
+          move();
         }, pauseDelay);
       } else if (nextOffset <= 0) {
         nextOffset = 0;
-        // Pause at the start, then reverse direction
         timeoutId = setTimeout(() => {
           direction = 1;
           move();
         }, pauseDelay);
       }
-
-      // Update the current offset
       currentOffset = nextOffset;
-
-      // Perform the scroll (if we just hit an edge, we already scrolled to it)
       scrollViewRef.current?.scrollTo({ x: currentOffset, animated: true });
-
-      // If we're not at an edge, schedule the next move
-      if (nextOffset > 0 && nextOffset < maxOffset) {
+      if (nextOffset > 0 && nextOffset < maxOffset)
         timeoutId = setTimeout(move, moveDelay);
-      }
-      // If we are at an edge, the pause timeout above will handle the next move
     };
-
-    // Start the animation
     timeoutId = setTimeout(move, moveDelay);
-
-    // Cleanup on unmount or when dimensions change
     return () => clearTimeout(timeoutId);
   }, [contentWidth, scrollViewWidth]);
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor="#0f3c91"
+          tintColor={colors.brand}
         />
       }
     >
-      {/* Header with gradient and overlay pattern */}
+      {/* Header */}
       <LinearGradient
-        colors={["#0f3c91", "#1a4da8"]}
+        colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
@@ -227,10 +201,20 @@ export default function HomeScreen({ navigation }) {
         </View>
       </LinearGradient>
 
-      {/* Clearance Card (without progress bar) */}
-      <View style={styles.clearanceCard}>
+      {/* Clearance Card */}
+      <View
+        style={[
+          styles.clearanceCard,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
         <View style={styles.clearanceInner}>
-          <View style={styles.clearanceIconContainer}>
+          <View
+            style={[
+              styles.clearanceIconContainer,
+              { backgroundColor: colors.surfaceSecondary },
+            ]}
+          >
             <Ionicons
               name={
                 !hasFees
@@ -242,15 +226,19 @@ export default function HomeScreen({ navigation }) {
               size={48}
               color={
                 !hasFees
-                  ? "#64748b"
+                  ? colors.textMuted
                   : clearance?.status === "cleared"
                     ? "#4caf50"
-                    : "rgb(244, 180, 20)"
+                    : "rgb(244,180,20)"
               }
             />
           </View>
           <View style={styles.clearanceInfo}>
-            <Text style={styles.clearanceTitle}>Exam Clearance</Text>
+            <Text
+              style={[styles.clearanceTitle, { color: colors.textSecondary }]}
+            >
+              Exam Clearance
+            </Text>
             {hasFees ? (
               <Text
                 style={[
@@ -259,14 +247,16 @@ export default function HomeScreen({ navigation }) {
                     color:
                       clearance?.status === "cleared"
                         ? "#4caf50"
-                        : "rgb(244, 180, 20)",
+                        : "rgb(244,180,20)",
                   },
                 ]}
               >
                 {clearance?.status === "cleared" ? "CLEARED" : "PENDING"}
               </Text>
             ) : (
-              <Text style={[styles.clearanceStatus, { color: "#64748b" }]}>
+              <Text
+                style={[styles.clearanceStatus, { color: colors.textMuted }]}
+              >
                 NO FEES
               </Text>
             )}
@@ -274,7 +264,7 @@ export default function HomeScreen({ navigation }) {
         </View>
       </View>
 
-      {/* ===== AUTO‑SCROLLING SUMMARY CARDS ===== */}
+      {/* Summary Cards */}
       <View style={styles.summaryCardsContainer}>
         <ScrollView
           ref={scrollViewRef}
@@ -282,11 +272,10 @@ export default function HomeScreen({ navigation }) {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.summaryCardsScroll}
           onLayout={(e) => setScrollViewWidth(e.nativeEvent.layout.width)}
-          onContentSizeChange={(w, h) => setContentWidth(w)}
+          onContentSizeChange={(w) => setContentWidth(w)}
         >
-          {/* Total Fees Card */}
           <LinearGradient
-            colors={["#0f3c91", "#1a4da8"]}
+            colors={[colors.gradientStart, colors.gradientEnd]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.summaryCard}
@@ -300,9 +289,8 @@ export default function HomeScreen({ navigation }) {
             </Text>
           </LinearGradient>
 
-          {/* Total Paid Card */}
           <LinearGradient
-            colors={["#0f3c91", "#1a4da8"]}
+            colors={[colors.gradientStart, colors.gradientEnd]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.summaryCard}
@@ -316,7 +304,6 @@ export default function HomeScreen({ navigation }) {
             </Text>
           </LinearGradient>
 
-          {/* Remaining Balance Card */}
           <LinearGradient
             colors={
               remainingBalance === 0
@@ -344,91 +331,89 @@ export default function HomeScreen({ navigation }) {
 
       {/* Quick Actions */}
       <View style={styles.quickActions}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <Text style={[styles.sectionTitle, { color: colors.brand }]}>
+          Quick Actions
+        </Text>
 
-        <TouchableOpacity
-          style={styles.actionCard}
-          onPress={() => navigation.navigate("Chatbot")}
-          activeOpacity={0.8}
-        >
-          <View
-            style={[
-              styles.iconCircle,
-              { backgroundColor: "rgb(244, 180, 20)" },
-            ]}
-          >
-            <Ionicons
-              name="chatbubble-ellipses-outline"
-              size={26}
-              color="#0f3c91"
-            />
-          </View>
-          <View style={styles.actionInfo}>
-            <Text style={styles.actionTitle}>UniBot</Text>
-            <Text style={styles.actionSubtitle}>Ask about the app</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color="#ccc" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionCard}
-          onPress={() => navigation.navigate("Fees")}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.iconCircle, { backgroundColor: "#0f3c91" }]}>
-            <Ionicons name="cash-outline" size={26} color="#fff" />
-          </View>
-          <View style={styles.actionInfo}>
-            <Text style={styles.actionTitle}>View Fees</Text>
-            <Text style={[styles.actionSubtitle, { color: feeStatusColor }]}>
-              {feeStatusText}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color="#ccc" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionCard}
-          onPress={() => navigation.navigate("Payment")}
-          activeOpacity={0.8}
-        >
-          <View
-            style={[
-              styles.iconCircle,
-              { backgroundColor: "rgb(244, 180, 20)" },
-            ]}
-          >
-            <Ionicons name="card-outline" size={26} color="#0f3c91" />
-          </View>
-          <View style={styles.actionInfo}>
-            <Text style={styles.actionTitle}>Pay Fees</Text>
-            <Text style={styles.actionSubtitle}>Pay via GCash</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color="#ccc" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionCard}
-          onPress={() => navigation.navigate("PaymentHistory")}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.iconCircle, { backgroundColor: "#0f3c91" }]}>
-            <Ionicons name="time-outline" size={26} color="#fff" />
-          </View>
-          <View style={styles.actionInfo}>
-            <Text style={styles.actionTitle}>Payment History</Text>
-            <Text style={styles.actionSubtitle}>View transactions</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color="#ccc" />
-        </TouchableOpacity>
+        {[
+          {
+            bg: "rgb(244,180,20)",
+            icon: "chatbubble-ellipses-outline",
+            iconColor: "#0f3c91",
+            title: "UniBot",
+            subtitle: "Ask about the app",
+            screen: "Chatbot",
+            subtitleColor: colors.textSecondary,
+          },
+          {
+            bg: colors.brand,
+            icon: "cash-outline",
+            iconColor: "#fff",
+            title: "View Fees",
+            subtitle: feeStatusText,
+            screen: "Fees",
+            subtitleColor: feeStatusColor,
+          },
+          {
+            bg: "rgb(244,180,20)",
+            icon: "card-outline",
+            iconColor: "#0f3c91",
+            title: "Pay Fees",
+            subtitle: "Pay via GCash",
+            screen: "Payment",
+            subtitleColor: colors.textSecondary,
+          },
+          {
+            bg: colors.brand,
+            icon: "time-outline",
+            iconColor: "#fff",
+            title: "Payment History",
+            subtitle: "View transactions",
+            screen: "PaymentHistory",
+            subtitleColor: colors.textSecondary,
+          },
+        ].map(
+          ({ bg, icon, iconColor, title, subtitle, screen, subtitleColor }) => (
+            <TouchableOpacity
+              key={title}
+              style={[
+                styles.actionCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.borderLight,
+                },
+              ]}
+              onPress={() => navigation.navigate(screen)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: bg }]}>
+                <Ionicons name={icon} size={26} color={iconColor} />
+              </View>
+              <View style={styles.actionInfo}>
+                <Text
+                  style={[styles.actionTitle, { color: colors.textPrimary }]}
+                >
+                  {title}
+                </Text>
+                <Text style={[styles.actionSubtitle, { color: subtitleColor }]}>
+                  {subtitle}
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={24}
+                color={colors.textMuted}
+              />
+            </TouchableOpacity>
+          ),
+        )}
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8fafc" },
-
+  container: { flex: 1 },
   headerGradient: {
     paddingTop: 60,
     paddingBottom: 30,
@@ -464,19 +449,9 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginBottom: 4,
   },
-  studentNo: {
-    fontSize: 16,
-    color: "rgba(255,255,255,0.9)",
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  notificationBadge: {
-    marginRight: 15,
-    padding: 5,
-    position: "relative",
-  },
+  studentNo: { fontSize: 16, color: "rgba(255,255,255,0.9)" },
+  headerRight: { flexDirection: "row", alignItems: "center" },
+  notificationBadge: { marginRight: 15, padding: 5, position: "relative" },
   badge: {
     position: "absolute",
     top: -5,
@@ -489,11 +464,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 3,
   },
-  badgeText: {
-    color: "white",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
+  badgeText: { color: "white", fontSize: 10, fontWeight: "bold" },
   profileBadge: {
     backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 35,
@@ -504,59 +475,34 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     borderWidth: 2,
-    borderColor: "rgb(244, 180, 20)",
+    borderColor: "rgb(244,180,20)",
   },
-
-  // Clearance Card
   clearanceCard: {
     marginTop: -20,
     marginHorizontal: 20,
-    backgroundColor: "#ffffff",
     borderRadius: 24,
     padding: 20,
-    shadowColor: "#0f3c91",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 10,
     borderWidth: 1,
-    borderColor: "rgba(15,60,145,0.1)",
   },
-  clearanceInner: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  clearanceInner: { flexDirection: "row", alignItems: "center" },
   clearanceIconContainer: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "#f8fafc",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 15,
   },
-  clearanceInfo: {
-    flex: 1,
-  },
-  clearanceTitle: {
-    fontSize: 16,
-    color: "#64748b",
-    marginBottom: 4,
-  },
-  clearanceStatus: {
-    fontSize: 28,
-    fontWeight: "700",
-  },
-
-  // Summary Cards
-  summaryCardsContainer: {
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  summaryCardsScroll: {
-    paddingHorizontal: 20,
-    gap: 12,
-  },
+  clearanceInfo: { flex: 1 },
+  clearanceTitle: { fontSize: 16, marginBottom: 4 },
+  clearanceStatus: { fontSize: 28, fontWeight: "700" },
+  summaryCardsContainer: { marginTop: 20, marginBottom: 10 },
+  summaryCardsScroll: { paddingHorizontal: 20, gap: 12 },
   summaryCard: {
     width: 140,
     height: 130,
@@ -583,25 +529,15 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.9)",
     fontWeight: "500",
   },
-  summaryValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#fff",
-  },
-
-  // Quick Actions
-  quickActions: {
-    padding: 20,
-  },
+  summaryValue: { fontSize: 18, fontWeight: "bold", color: "#fff" },
+  quickActions: { padding: 20 },
   sectionTitle: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#0f3c91",
     marginBottom: 18,
     letterSpacing: -0.3,
   },
   actionCard: {
-    backgroundColor: "#fff",
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
@@ -613,7 +549,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
     borderWidth: 1,
-    borderColor: "#f1f5f9",
   },
   iconCircle: {
     width: 50,
@@ -627,17 +562,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  actionInfo: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  actionTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#1e293b",
-    marginBottom: 2,
-  },
-  actionSubtitle: {
-    fontSize: 14,
-  },
+  actionInfo: { flex: 1, marginLeft: 16 },
+  actionTitle: { fontSize: 17, fontWeight: "600", marginBottom: 2 },
+  actionSubtitle: { fontSize: 14 },
 });

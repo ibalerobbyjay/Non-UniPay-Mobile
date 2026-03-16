@@ -13,13 +13,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
 
 export default function PaymentScreen({ navigation }) {
-  // Hide the navigation header
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
+
+  const { colors } = useTheme();
 
   const [feeBreakdown, setFeeBreakdown] = useState(null);
   const [selectedFees, setSelectedFees] = useState({});
@@ -36,7 +38,6 @@ export default function PaymentScreen({ navigation }) {
         api.get("/fees/breakdown"),
         api.get("/payments/history"),
       ]);
-
       const breakdown = feesRes.data.breakdown;
       setFeeBreakdown(breakdown);
 
@@ -44,9 +45,7 @@ export default function PaymentScreen({ navigation }) {
       const paidFees = new Set();
       payments.forEach((payment) => {
         if (payment.status === "paid" && payment.fees) {
-          payment.fees.forEach((fee) => {
-            paidFees.add(fee.id);
-          });
+          payment.fees.forEach((fee) => paidFees.add(fee.id));
         }
       });
       setPaidFeeIds(paidFees);
@@ -72,7 +71,6 @@ export default function PaymentScreen({ navigation }) {
 
   const toggleFee = (feeId, amount) => {
     if (paidFeeIds.has(feeId)) return;
-
     setSelectedFees((prev) => {
       const newSelected = { ...prev };
       if (newSelected[feeId]) {
@@ -94,17 +92,14 @@ export default function PaymentScreen({ navigation }) {
       Alert.alert("Error", "Please select at least one fee to pay");
       return;
     }
-
     if (selectedTotal < 100) {
       Alert.alert("Error", "Minimum payment amount is ₱100");
       return;
     }
-
     if (selectedTotal > 100000) {
       Alert.alert("Error", "Amount exceeds PayMongo maximum of ₱100,000");
       return;
     }
-
     Alert.alert(
       "Confirm Payment",
       `Pay ₱${selectedTotal.toLocaleString()} for selected fees via GCash?`,
@@ -117,15 +112,12 @@ export default function PaymentScreen({ navigation }) {
 
   const processPayment = async () => {
     setLoading(true);
-
     try {
       const feeIds = Object.keys(selectedFees);
-
       const response = await api.post("/payments/initiate", {
         amount: selectedTotal,
         fee_ids: feeIds,
       });
-
       if (response.data.success) {
         const { payment_url, payment_id } = response.data;
         const supported = await Linking.canOpenURL(payment_url);
@@ -142,7 +134,6 @@ export default function PaymentScreen({ navigation }) {
         );
       }
     } catch (error) {
-      console.error("Payment error:", error.response?.data || error.message);
       Alert.alert(
         "Payment Failed",
         error.response?.data?.message || "An error occurred",
@@ -178,22 +169,34 @@ export default function PaymentScreen({ navigation }) {
           Alert.alert("Payment Failed ❌", "Please try again.");
         }
       } catch (err) {
-        console.error("Status check error:", err);
         clearInterval(interval);
         setCheckingStatus(false);
       }
     }, 5000);
   };
 
-  const renderFeeItem = (fee, categoryColor = "#0f3c91") => {
+  const renderFeeItem = (fee, categoryColor) => {
     const isSelected = !!selectedFees[fee.id];
     const isPaid = paidFeeIds.has(fee.id);
+    const activeCategoryColor = categoryColor || colors.brand;
 
     if (isPaid) {
       return (
-        <View key={fee.id} style={[styles.feeItem, styles.feeItemPaid]}>
+        <View
+          key={fee.id}
+          style={[
+            styles.feeItem,
+            {
+              backgroundColor: colors.surface,
+              borderColor: "#4caf50",
+              borderWidth: 1,
+            },
+          ]}
+        >
           <View style={styles.feeInfo}>
-            <Text style={styles.feeName}>{fee.name}</Text>
+            <Text style={[styles.feeName, { color: colors.textPrimary }]}>
+              {fee.name}
+            </Text>
             <Text style={[styles.feeAmount, { color: "#4caf50" }]}>
               ₱{parseFloat(fee.amount).toLocaleString()} – Paid
             </Text>
@@ -206,20 +209,29 @@ export default function PaymentScreen({ navigation }) {
     return (
       <TouchableOpacity
         key={fee.id}
-        style={[styles.feeItem, isSelected && styles.feeItemSelected]}
+        style={[
+          styles.feeItem,
+          {
+            backgroundColor: colors.surface,
+            borderColor: isSelected ? colors.brand : colors.border,
+            borderWidth: isSelected ? 1.5 : 1,
+          },
+        ]}
         onPress={() => toggleFee(fee.id, parseFloat(fee.amount))}
         activeOpacity={0.7}
       >
         <View style={styles.feeInfo}>
-          <Text style={styles.feeName}>{fee.name}</Text>
-          <Text style={styles.feeAmount}>
+          <Text style={[styles.feeName, { color: colors.textPrimary }]}>
+            {fee.name}
+          </Text>
+          <Text style={[styles.feeAmount, { color: colors.brand }]}>
             ₱{parseFloat(fee.amount).toLocaleString()}
           </Text>
         </View>
         <Ionicons
           name={isSelected ? "checkbox" : "square-outline"}
           size={24}
-          color={isSelected ? categoryColor : "#94a3b8"}
+          color={isSelected ? activeCategoryColor : colors.textMuted}
         />
       </TouchableOpacity>
     );
@@ -227,8 +239,13 @@ export default function PaymentScreen({ navigation }) {
 
   if (fetching) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0f3c91" />
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
@@ -241,9 +258,10 @@ export default function PaymentScreen({ navigation }) {
     ].length > 0;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
       <LinearGradient
-        colors={["#0f3c91", "#1a4da8"]}
+        colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
@@ -266,71 +284,86 @@ export default function PaymentScreen({ navigation }) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#0f3c91"
+            tintColor={colors.brand}
           />
         }
       >
         <View style={styles.iconContainer}>
-          <Ionicons name="card" size={80} color="#0f3c91" />
+          <Ionicons name="card" size={80} color={colors.brand} />
         </View>
-        <Text style={styles.title}>School Fees</Text>
-        <Text style={styles.subtitle}>Select the fees you want to pay</Text>
+        <Text style={[styles.title, { color: colors.brand }]}>School Fees</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Select the fees you want to pay
+        </Text>
 
         {hasFees ? (
           <View style={styles.feesContainer}>
-            {/* Tuition Fees */}
             {feeBreakdown?.tuition?.fees?.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Tuition Fees</Text>
+                <Text style={[styles.sectionTitle, { color: colors.brand }]}>
+                  Tuition Fees
+                </Text>
                 {feeBreakdown.tuition.fees.map((fee) =>
-                  renderFeeItem(fee, "#0f3c91"),
+                  renderFeeItem(fee, colors.brand),
                 )}
               </View>
             )}
-
-            {/* Miscellaneous Fees */}
             {feeBreakdown?.miscellaneous?.fees?.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Miscellaneous Fees</Text>
+                <Text style={[styles.sectionTitle, { color: colors.brand }]}>
+                  Miscellaneous Fees
+                </Text>
                 {feeBreakdown.miscellaneous.fees.map((fee) =>
                   renderFeeItem(fee, "rgb(244, 180, 20)"),
                 )}
               </View>
             )}
-
-            {/* Exam Fees */}
             {feeBreakdown?.exam?.fees?.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Exam Fees</Text>
+                <Text style={[styles.sectionTitle, { color: colors.brand }]}>
+                  Exam Fees
+                </Text>
                 {feeBreakdown.exam.fees.map((fee) =>
-                  renderFeeItem(fee, "#0f3c91"),
+                  renderFeeItem(fee, colors.brand),
                 )}
               </View>
             )}
           </View>
         ) : (
           <View style={styles.emptyContainer}>
-            <Ionicons name="alert-circle-outline" size={60} color="#94a3b8" />
-            <Text style={styles.emptyText}>No fees available</Text>
+            <Ionicons
+              name="alert-circle-outline"
+              size={60}
+              color={colors.textMuted}
+            />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+              No fees available
+            </Text>
           </View>
         )}
 
-        {/* Spacer for footer */}
         <View style={{ height: 100 }} />
       </ScrollView>
 
       {/* Footer */}
-      <View style={styles.footer}>
+      <View
+        style={[
+          styles.footer,
+          { backgroundColor: colors.surface, borderTopColor: colors.border },
+        ]}
+      >
         <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Total to pay:</Text>
-          <Text style={styles.totalAmount}>
+          <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>
+            Total to pay:
+          </Text>
+          <Text style={[styles.totalAmount, { color: colors.brand }]}>
             ₱{selectedTotal.toLocaleString()}
           </Text>
         </View>
-
         <TouchableOpacity
           style={[
             styles.payButton,
+            { backgroundColor: colors.brand },
             (loading || checkingStatus || selectedTotal === 0) &&
               styles.payButtonDisabled,
           ]}
@@ -352,15 +385,8 @@ export default function PaymentScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   headerGradient: {
     paddingTop: 60,
     paddingBottom: 20,
@@ -386,42 +412,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#fff",
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  iconContainer: {
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    textAlign: "center",
-    color: "#0f3c91",
-  },
-  subtitle: {
-    textAlign: "center",
-    marginTop: 5,
-    marginBottom: 20,
-    color: "#64748b",
-  },
-  feesContainer: {
-    paddingBottom: 20,
-  },
-  section: {
-    marginBottom: 24,
-  },
+  headerTitle: { fontSize: 24, fontWeight: "bold", color: "#fff" },
+  content: { flex: 1, paddingHorizontal: 20, paddingTop: 20 },
+  iconContainer: { alignItems: "center", marginBottom: 10 },
+  title: { fontSize: 24, fontWeight: "bold", textAlign: "center" },
+  subtitle: { textAlign: "center", marginTop: 5, marginBottom: 20 },
+  feesContainer: { paddingBottom: 20 },
+  section: { marginBottom: 24 },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#0f3c91",
     marginBottom: 12,
     paddingHorizontal: 4,
   },
@@ -429,62 +429,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#fff",
     padding: 16,
     borderRadius: 16,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#f1f5f9",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
   },
-  feeItemSelected: {
-    backgroundColor: "#f8fafc",
-    borderColor: "#0f3c91",
-    borderWidth: 1.5,
-  },
-  feeItemPaid: {
-    backgroundColor: "#f0fdf4",
-    borderColor: "#4caf50",
-    borderWidth: 1,
-  },
-  feeInfo: {
-    flex: 1,
-  },
-  feeName: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#1e293b",
-    marginBottom: 4,
-  },
-  feeAmount: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#0f3c91",
-  },
+  feeInfo: { flex: 1 },
+  feeName: { fontSize: 15, fontWeight: "500", marginBottom: 4 },
+  feeAmount: { fontSize: 16, fontWeight: "600" },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 60,
   },
-  emptyText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#94a3b8",
-  },
+  emptyText: { marginTop: 16, fontSize: 16 },
   footer: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "#fff",
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.04,
@@ -497,36 +467,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  totalLabel: {
-    fontSize: 16,
-    color: "#475569",
-  },
-  totalAmount: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#0f3c91",
-  },
+  totalLabel: { fontSize: 16 },
+  totalAmount: { fontSize: 24, fontWeight: "bold" },
   payButton: {
-    backgroundColor: "#0f3c91",
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
     borderRadius: 30,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
     gap: 8,
+    elevation: 3,
   },
-  payButtonDisabled: {
-    backgroundColor: "#94a3b8",
-    opacity: 0.6,
-  },
-  payButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-  },
+  payButtonDisabled: { backgroundColor: "#94a3b8", opacity: 0.6 },
+  payButtonText: { color: "#fff", fontSize: 18, fontWeight: "600" },
 });

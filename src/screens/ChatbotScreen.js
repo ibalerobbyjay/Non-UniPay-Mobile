@@ -12,10 +12,10 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import api from "../services/api"; // ✅ uses your existing axios instance with auth token
+import { useTheme } from "../contexts/ThemeContext";
+import api from "../services/api";
 
-// ─── Message Bubble ────────────────────────────────────────────────────────────
-function MessageBubble({ message }) {
+function MessageBubble({ message, colors }) {
   const isUser = message.role === "user";
   return (
     <View
@@ -30,12 +30,22 @@ function MessageBubble({ message }) {
         </View>
       )}
       <View
-        style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleBot]}
+        style={[
+          styles.bubble,
+          isUser
+            ? { backgroundColor: colors.brand, borderBottomRightRadius: 4 }
+            : {
+                backgroundColor: colors.surface,
+                borderBottomLeftRadius: 4,
+                borderWidth: 1,
+                borderColor: colors.borderLight,
+              },
+        ]}
       >
         <Text
           style={[
             styles.bubbleText,
-            isUser ? styles.bubbleTextUser : styles.bubbleTextBot,
+            { color: isUser ? "#fff" : colors.textPrimary },
           ]}
         >
           {message.content}
@@ -45,7 +55,6 @@ function MessageBubble({ message }) {
   );
 }
 
-// ─── Suggestion Chips ──────────────────────────────────────────────────────────
 const SUGGESTIONS = [
   "How do I pay my fees?",
   "What does PENDING clearance mean?",
@@ -53,8 +62,9 @@ const SUGGESTIONS = [
   "Where is my student number?",
 ];
 
-// ─── Main Screen ───────────────────────────────────────────────────────────────
 export default function ChatbotScreen({ navigation }) {
+  const { colors } = useTheme();
+
   const [messages, setMessages] = useState([
     {
       id: "welcome",
@@ -68,9 +78,7 @@ export default function ChatbotScreen({ navigation }) {
   const flatListRef = useRef(null);
 
   useEffect(() => {
-    if (navigation) {
-      navigation.setOptions({ headerShown: false });
-    }
+    if (navigation) navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
   const sendMessage = async (text) => {
@@ -87,17 +95,14 @@ export default function ChatbotScreen({ navigation }) {
     setInput("");
     setLoading(true);
 
-    // Build history excluding the local welcome message
     const history = newMessages
       .filter((m) => m.id !== "welcome")
       .map((m) => ({ role: m.role, content: m.content }));
 
     try {
-      // ✅ Calls your Laravel backend: POST /api/chatbot
       const res = await api.post("/chatbot", { messages: history });
       const reply =
         res.data?.reply || "I didn't get a response. Please try again.";
-
       setMessages((prev) => [
         ...prev,
         {
@@ -107,7 +112,6 @@ export default function ChatbotScreen({ navigation }) {
         },
       ]);
     } catch (err) {
-      console.error("Chatbot error:", err?.response?.data || err.message);
       setMessages((prev) => [
         ...prev,
         {
@@ -124,12 +128,12 @@ export default function ChatbotScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       {/* Header */}
       <LinearGradient
-        colors={["#0f3c91", "#1a4da8"]}
+        colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
@@ -158,7 +162,9 @@ export default function ChatbotScreen({ navigation }) {
         ref={flatListRef}
         data={messages}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <MessageBubble message={item} />}
+        renderItem={({ item }) => (
+          <MessageBubble message={item} colors={colors} />
+        )}
         contentContainerStyle={styles.messageList}
         onContentSizeChange={() =>
           flatListRef.current?.scrollToEnd({ animated: true })
@@ -170,9 +176,21 @@ export default function ChatbotScreen({ navigation }) {
               <View style={styles.botAvatar}>
                 <Text style={styles.botAvatarText}>U</Text>
               </View>
-              <View style={styles.typingBubble}>
-                <ActivityIndicator size="small" color="#0f3c91" />
-                <Text style={styles.typingText}>UniBot is typing…</Text>
+              <View
+                style={[
+                  styles.typingBubble,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.borderLight,
+                  },
+                ]}
+              >
+                <ActivityIndicator size="small" color={colors.brand} />
+                <Text
+                  style={[styles.typingText, { color: colors.textSecondary }]}
+                >
+                  UniBot is typing…
+                </Text>
               </View>
             </View>
           ) : null
@@ -190,11 +208,19 @@ export default function ChatbotScreen({ navigation }) {
             contentContainerStyle={styles.suggestionsList}
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={styles.chip}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.brand,
+                  },
+                ]}
                 onPress={() => sendMessage(item)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.chipText}>{item}</Text>
+                <Text style={[styles.chipText, { color: colors.brand }]}>
+                  {item}
+                </Text>
               </TouchableOpacity>
             )}
           />
@@ -202,11 +228,26 @@ export default function ChatbotScreen({ navigation }) {
       )}
 
       {/* Input Bar */}
-      <View style={styles.inputBar}>
+      <View
+        style={[
+          styles.inputBar,
+          {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.borderLight,
+          },
+        ]}
+      >
         <TextInput
-          style={styles.textInput}
+          style={[
+            styles.textInput,
+            {
+              backgroundColor: colors.inputBackground,
+              borderColor: colors.border,
+              color: colors.textPrimary,
+            },
+          ]}
           placeholder="Ask about UniPay…"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.textMuted}
           value={input}
           onChangeText={setInput}
           multiline
@@ -227,7 +268,7 @@ export default function ChatbotScreen({ navigation }) {
           <LinearGradient
             colors={
               input.trim() && !loading
-                ? ["#0f3c91", "#1a4da8"]
+                ? [colors.gradientStart, colors.gradientEnd]
                 : ["#cbd5e1", "#cbd5e1"]
             }
             style={styles.sendBtnGradient}
@@ -241,7 +282,7 @@ export default function ChatbotScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8fafc" },
+  container: { flex: 1 },
   header: {
     paddingTop: 56,
     paddingBottom: 16,
@@ -289,22 +330,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
-  },
-  bubbleUser: { backgroundColor: "#0f3c91", borderBottomRightRadius: 4 },
-  bubbleBot: {
-    backgroundColor: "#fff",
-    borderBottomLeftRadius: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
-    borderWidth: 1,
-    borderColor: "#f1f5f9",
   },
   bubbleText: { fontSize: 15, lineHeight: 22 },
-  bubbleTextUser: { color: "#fff" },
-  bubbleTextBot: { color: "#1e293b" },
   typingIndicator: {
     flexDirection: "row",
     alignItems: "center",
@@ -313,36 +345,30 @@ const styles = StyleSheet.create({
   typingBubble: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
     borderRadius: 18,
     borderBottomLeftRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
     borderWidth: 1,
-    borderColor: "#f1f5f9",
     elevation: 2,
   },
-  typingText: { fontSize: 14, color: "#64748b" },
+  typingText: { fontSize: 14 },
   suggestionsContainer: { paddingVertical: 10 },
   suggestionsList: { paddingHorizontal: 16, gap: 8 },
   chip: {
-    backgroundColor: "#fff",
     borderWidth: 1.5,
-    borderColor: "#0f3c91",
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  chipText: { color: "#0f3c91", fontSize: 13, fontWeight: "600" },
+  chipText: { fontSize: 13, fontWeight: "600" },
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: "#f1f5f9",
     gap: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
@@ -352,15 +378,12 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    backgroundColor: "#f8fafc",
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 10,
     fontSize: 15,
-    color: "#1e293b",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
     maxHeight: 100,
   },
   sendBtn: { alignSelf: "flex-end" },
