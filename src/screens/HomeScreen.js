@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Image,
@@ -29,6 +29,11 @@ export default function HomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const route = useRoute();
+
+  // Refs and state for auto‑scrolling summary cards
+  const scrollViewRef = useRef(null);
+  const [scrollViewWidth, setScrollViewWidth] = useState(0);
+  const [contentWidth, setContentWidth] = useState(0);
 
   const loadData = useCallback(async () => {
     try {
@@ -104,6 +109,62 @@ export default function HomeScreen({ navigation }) {
     feeStatusText = `₱${remainingBalance.toLocaleString()} remaining`;
     feeStatusColor = "#64748b";
   }
+
+  // Auto‑scroll effect for the summary cards (slower, full traversal)
+  // Auto‑scroll effect with a 1‑second pause at each end
+  useEffect(() => {
+    if (contentWidth === 0 || scrollViewWidth === 0) return;
+    const maxOffset = contentWidth - scrollViewWidth;
+    if (maxOffset <= 0) return;
+
+    let direction = 1; // 1 = moving right, -1 = moving left
+    let currentOffset = 0;
+    let timeoutId;
+
+    const step = 5; // pixels per move (smaller = slower)
+    const moveDelay = 50; // ms between moves (smaller = faster)
+    const pauseDelay = 1000; // 1 second pause at ends
+
+    const move = () => {
+      // Calculate next position
+      let nextOffset = currentOffset + direction * step;
+
+      // Check if we hit an edge
+      if (nextOffset >= maxOffset) {
+        nextOffset = maxOffset;
+        // Pause at the end, then reverse direction
+        timeoutId = setTimeout(() => {
+          direction = -1;
+          move(); // continue moving after pause
+        }, pauseDelay);
+      } else if (nextOffset <= 0) {
+        nextOffset = 0;
+        // Pause at the start, then reverse direction
+        timeoutId = setTimeout(() => {
+          direction = 1;
+          move();
+        }, pauseDelay);
+      }
+
+      // Update the current offset
+      currentOffset = nextOffset;
+
+      // Perform the scroll (if we just hit an edge, we already scrolled to it)
+      scrollViewRef.current?.scrollTo({ x: currentOffset, animated: true });
+
+      // If we're not at an edge, schedule the next move
+      if (nextOffset > 0 && nextOffset < maxOffset) {
+        timeoutId = setTimeout(move, moveDelay);
+      }
+      // If we are at an edge, the pause timeout above will handle the next move
+    };
+
+    // Start the animation
+    timeoutId = setTimeout(move, moveDelay);
+
+    // Cleanup on unmount or when dimensions change
+    return () => clearTimeout(timeoutId);
+  }, [contentWidth, scrollViewWidth]);
 
   return (
     <ScrollView
@@ -213,12 +274,15 @@ export default function HomeScreen({ navigation }) {
         </View>
       </View>
 
-      {/* ===== NEW SUMMARY CARDS SECTION ===== */}
+      {/* ===== AUTO‑SCROLLING SUMMARY CARDS ===== */}
       <View style={styles.summaryCardsContainer}>
         <ScrollView
+          ref={scrollViewRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.summaryCardsScroll}
+          onLayout={(e) => setScrollViewWidth(e.nativeEvent.layout.width)}
+          onContentSizeChange={(w, h) => setContentWidth(w)}
         >
           {/* Total Fees Card */}
           <LinearGradient
