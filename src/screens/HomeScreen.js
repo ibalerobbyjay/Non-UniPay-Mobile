@@ -284,6 +284,30 @@ export default function HomeScreen({ navigation }) {
 
         <TouchableOpacity
           style={styles.actionCard}
+          onPress={() => navigation.navigate("Chatbot")}
+          activeOpacity={0.8}
+        >
+          <View
+            style={[
+              styles.iconCircle,
+              { backgroundColor: "rgb(244, 180, 20)" },
+            ]}
+          >
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              size={26}
+              color="#0f3c91"
+            />
+          </View>
+          <View style={styles.actionInfo}>
+            <Text style={styles.actionTitle}>UniBot</Text>
+            <Text style={styles.actionSubtitle}>Ask about the app</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#ccc" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionCard}
           onPress={() => navigation.navigate("Fees")}
           activeOpacity={0.8}
         >
