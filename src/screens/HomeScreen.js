@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Dimensions,
   Image,
   RefreshControl,
   ScrollView,
@@ -16,6 +17,197 @@ import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
 
+const { width } = Dimensions.get("window");
+const CARD_WIDTH = width - 40;
+const CARD_INTERVAL = CARD_WIDTH + 16;
+const AUTO_SWIPE_DELAY = 5000;
+
+// ─── Donut Ring (pure RN — no SVG library) ────────────────────────────────
+function DonutRing({ percentage }) {
+  const pct = isNaN(percentage) ? 0 : Math.min(Math.max(percentage, 0), 100);
+  const size = 76;
+  const ring = size;
+  const hole = size - 18;
+  const deg = (pct / 100) * 360;
+  const firstHalfDeg = Math.min(deg, 180);
+  const secondHalfDeg = Math.max(deg - 180, 0);
+
+  return (
+    <View
+      style={{
+        width: ring,
+        height: ring,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <View
+        style={{
+          position: "absolute",
+          width: ring,
+          height: ring,
+          borderRadius: ring / 2,
+          borderWidth: 9,
+          borderColor: "rgba(255,255,255,0.25)",
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          width: ring,
+          height: ring,
+          borderRadius: ring / 2,
+          overflow: "hidden",
+        }}
+      >
+        <View
+          style={{
+            position: "absolute",
+            width: ring,
+            height: ring / 2,
+            top: 0,
+            left: 0,
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              width: ring,
+              height: ring,
+              borderRadius: ring / 2,
+              borderWidth: 9,
+              borderColor: pct > 0 ? "#fff" : "transparent",
+              transform: [{ rotate: `${firstHalfDeg - 180}deg` }],
+            }}
+          />
+        </View>
+      </View>
+      {deg > 180 && (
+        <View
+          style={{
+            position: "absolute",
+            width: ring,
+            height: ring,
+            borderRadius: ring / 2,
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              position: "absolute",
+              width: ring,
+              height: ring / 2,
+              bottom: 0,
+              left: 0,
+              overflow: "hidden",
+            }}
+          >
+            <View
+              style={{
+                width: ring,
+                height: ring,
+                borderRadius: ring / 2,
+                borderWidth: 9,
+                borderColor: "#fff",
+                position: "absolute",
+                bottom: 0,
+                transform: [{ rotate: `${secondHalfDeg}deg` }],
+              }}
+            />
+          </View>
+        </View>
+      )}
+      <View
+        style={{
+          width: hole,
+          height: hole,
+          borderRadius: hole / 2,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text style={styles.ringPct}>{Math.round(pct)}%</Text>
+        <Text style={styles.ringSub}>paid</Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Breakdown Bars (Card 2) ───────────────────────────────────────────────
+// API shape: breakdown.tuition.total, breakdown.miscellaneous.total, breakdown.exam.total
+// breakdown.total_paid is the total amount paid across all categories
+function BreakdownBars({ breakdown }) {
+  const grandTotal = breakdown?.grand_total || 0;
+  const totalPaid = parseFloat(breakdown?.total_paid || 0);
+
+  const categories = [
+    { label: "Tuition", total: breakdown?.tuition?.total || 0 },
+    { label: "Miscellaneous", total: breakdown?.miscellaneous?.total || 0 },
+    { label: "Exam", total: breakdown?.exam?.total || 0 },
+  ];
+
+  // Distribute paid amount across categories proportionally (largest first)
+  let remaining = totalPaid;
+  const withPaid = categories.map((cat) => {
+    const catPaid = Math.min(remaining, cat.total);
+    remaining = Math.max(remaining - catPaid, 0);
+    const pct = cat.total > 0 ? (catPaid / cat.total) * 100 : 0;
+    return { ...cat, pct };
+  });
+
+  return (
+    <View style={styles.barsWrap}>
+      {withPaid.map((cat) => (
+        <View key={cat.label} style={styles.barRow}>
+          <View style={styles.barLabelRow}>
+            <Text style={styles.barLabel}>{cat.label}</Text>
+            <Text style={styles.barAmt}>₱{cat.total.toLocaleString()}</Text>
+          </View>
+          <View style={styles.barTrack}>
+            <View
+              style={[styles.barFill, { width: `${Math.min(cat.pct, 100)}%` }]}
+            />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ─── Payment Status Card (Card 3) ─────────────────────────────────────────
+// Uses breakdown.status ("paid", "partial", "unpaid") + remaining_balance
+function PaymentStatus({ breakdown, remainingBalance }) {
+  const status = breakdown?.status || "unpaid";
+  const grandTotal = breakdown?.grand_total || 0;
+  const totalPaid = parseFloat(breakdown?.total_paid || 0);
+
+  const statusConfig = {
+    paid: { label: "Fully Paid", icon: "checkmark-circle", color: "#4ade80" },
+    partial: { label: "Partial", icon: "time", color: "#fbbf24" },
+    unpaid: { label: "Not Paid", icon: "close-circle", color: "#f87171" },
+  };
+  const cfg = statusConfig[status] || statusConfig.unpaid;
+
+  return (
+    <View style={styles.statusWrap}>
+      <Ionicons name={cfg.icon} size={28} color={cfg.color} />
+      <Text style={[styles.statusLabel, { color: cfg.color }]}>
+        {cfg.label}
+      </Text>
+      <View style={styles.dueDivider} />
+      <View style={styles.dueStat}>
+        <Text style={styles.dueVal}>
+          {grandTotal > 0
+            ? `${Math.round((totalPaid / grandTotal) * 100)}%`
+            : "0%"}
+        </Text>
+        <Text style={styles.dueLbl}>of total</Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Main Screen ───────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }) {
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
@@ -29,11 +221,16 @@ export default function HomeScreen({ navigation }) {
   const [breakdown, setBreakdown] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
 
   const route = useRoute();
-  const scrollViewRef = useRef(null);
-  const [scrollViewWidth, setScrollViewWidth] = useState(0);
-  const [contentWidth, setContentWidth] = useState(0);
+  const cardScrollRef = useRef(null);
+  const autoSwipeTimer = useRef(null);
+  const currentIndex = useRef(0);
+  const direction = useRef(1);
+  const isUserScrolling = useRef(false);
+
+  const TOTAL_CARDS = 3;
 
   const loadData = useCallback(async () => {
     try {
@@ -74,6 +271,34 @@ export default function HomeScreen({ navigation }) {
     }, [route.params?.paymentSuccess, loadData, navigation]),
   );
 
+  const startAutoSwipe = useCallback(() => {
+    if (autoSwipeTimer.current) clearInterval(autoSwipeTimer.current);
+    autoSwipeTimer.current = setInterval(() => {
+      if (isUserScrolling.current) return;
+      let next = currentIndex.current + direction.current;
+      if (next >= TOTAL_CARDS - 1) {
+        next = TOTAL_CARDS - 1;
+        direction.current = -1;
+      } else if (next <= 0) {
+        next = 0;
+        direction.current = 1;
+      }
+      cardScrollRef.current?.scrollTo({
+        x: next * CARD_INTERVAL,
+        animated: true,
+      });
+      currentIndex.current = next;
+      setActiveCardIndex(next);
+    }, AUTO_SWIPE_DELAY);
+  }, []);
+
+  useEffect(() => {
+    startAutoSwipe();
+    return () => {
+      if (autoSwipeTimer.current) clearInterval(autoSwipeTimer.current);
+    };
+  }, [startAutoSwipe]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData();
@@ -88,10 +313,10 @@ export default function HomeScreen({ navigation }) {
     ].length > 0;
 
   const totalDue = breakdown?.grand_total || 0;
-  const totalPaid = breakdown?.total_paid || 0;
-  const remainingBalance = hasFees
-    ? (breakdown?.remaining_balance ?? Math.max(totalDue - totalPaid, 0))
-    : 0;
+  const totalPaid = parseFloat(breakdown?.total_paid || 0);
+  const remainingBalance =
+    breakdown?.remaining_balance ?? Math.max(totalDue - totalPaid, 0);
+  const paidPercentage = totalDue > 0 ? (totalPaid / totalDue) * 100 : 0;
 
   let feeStatusText = "";
   let feeStatusColor = colors.textSecondary;
@@ -106,39 +331,13 @@ export default function HomeScreen({ navigation }) {
     feeStatusColor = colors.textSecondary;
   }
 
-  useEffect(() => {
-    if (contentWidth === 0 || scrollViewWidth === 0) return;
-    const maxOffset = contentWidth - scrollViewWidth;
-    if (maxOffset <= 0) return;
-    let direction = 1,
-      currentOffset = 0,
-      timeoutId;
-    const step = 5,
-      moveDelay = 50,
-      pauseDelay = 1000;
-    const move = () => {
-      let nextOffset = currentOffset + direction * step;
-      if (nextOffset >= maxOffset) {
-        nextOffset = maxOffset;
-        timeoutId = setTimeout(() => {
-          direction = -1;
-          move();
-        }, pauseDelay);
-      } else if (nextOffset <= 0) {
-        nextOffset = 0;
-        timeoutId = setTimeout(() => {
-          direction = 1;
-          move();
-        }, pauseDelay);
-      }
-      currentOffset = nextOffset;
-      scrollViewRef.current?.scrollTo({ x: currentOffset, animated: true });
-      if (nextOffset > 0 && nextOffset < maxOffset)
-        timeoutId = setTimeout(move, moveDelay);
-    };
-    timeoutId = setTimeout(move, moveDelay);
-    return () => clearTimeout(timeoutId);
-  }, [contentWidth, scrollViewWidth]);
+  const handleCardScroll = (event) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / CARD_INTERVAL);
+    const clamped = Math.max(0, Math.min(index, TOTAL_CARDS - 1));
+    currentIndex.current = clamped;
+    setActiveCardIndex(clamped);
+  };
 
   return (
     <ScrollView
@@ -267,43 +466,69 @@ export default function HomeScreen({ navigation }) {
       {/* Summary Cards */}
       <View style={styles.summaryCardsContainer}>
         <ScrollView
-          ref={scrollViewRef}
+          ref={cardScrollRef}
           horizontal
+          pagingEnabled={false}
           showsHorizontalScrollIndicator={false}
+          snapToInterval={CARD_INTERVAL}
+          snapToAlignment="center"
+          decelerationRate="fast"
           contentContainerStyle={styles.summaryCardsScroll}
-          onLayout={(e) => setScrollViewWidth(e.nativeEvent.layout.width)}
-          onContentSizeChange={(w) => setContentWidth(w)}
+          onScroll={handleCardScroll}
+          scrollEventThrottle={16}
+          onScrollBeginDrag={() => {
+            isUserScrolling.current = true;
+            if (autoSwipeTimer.current) clearInterval(autoSwipeTimer.current);
+          }}
+          onScrollEndDrag={() => {
+            isUserScrolling.current = false;
+            startAutoSwipe();
+          }}
+          onMomentumScrollEnd={handleCardScroll}
         >
+          {/* Card 1 — Total Fees + Donut Ring (% paid) */}
           <LinearGradient
             colors={[colors.gradientStart, colors.gradientEnd]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.summaryCard}
+            style={[styles.summaryCard, { width: CARD_WIDTH }]}
           >
-            <View style={styles.summaryIconCircle}>
-              <Ionicons name="cash-outline" size={24} color="#0f3c91" />
+            <View style={styles.cardLeft}>
+              <View style={styles.summaryIconCircle}>
+                <Ionicons name="cash-outline" size={24} color="#0f3c91" />
+              </View>
+              <View>
+                <Text style={styles.summaryLabel}>Total Fees</Text>
+                <Text style={styles.summaryValue}>
+                  ₱{totalDue.toLocaleString()}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.summaryLabel}>Total Fees</Text>
-            <Text style={styles.summaryValue}>
-              ₱{totalDue.toLocaleString()}
-            </Text>
+            <DonutRing percentage={paidPercentage} />
           </LinearGradient>
 
+          {/* Card 2 — Total Paid + Breakdown Bars */}
           <LinearGradient
             colors={[colors.gradientStart, colors.gradientEnd]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.summaryCard}
+            style={[styles.summaryCard, { width: CARD_WIDTH }]}
           >
-            <View style={styles.summaryIconCircle}>
-              <Ionicons name="checkmark-circle" size={24} color="#0f3c91" />
+            <View style={styles.cardLeft}>
+              <View style={styles.summaryIconCircle}>
+                <Ionicons name="checkmark-circle" size={24} color="#0f3c91" />
+              </View>
+              <View>
+                <Text style={styles.summaryLabel}>Total Paid</Text>
+                <Text style={styles.summaryValue}>
+                  ₱{Math.round(totalPaid).toLocaleString()}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.summaryLabel}>Total Paid</Text>
-            <Text style={styles.summaryValue}>
-              ₱{Math.round(totalPaid).toLocaleString()}
-            </Text>
+            <BreakdownBars breakdown={breakdown} />
           </LinearGradient>
 
+          {/* Card 3 — Remaining + Payment Status */}
           <LinearGradient
             colors={
               remainingBalance === 0
@@ -312,21 +537,44 @@ export default function HomeScreen({ navigation }) {
             }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.summaryCard}
+            style={[styles.summaryCard, { width: CARD_WIDTH }]}
           >
-            <View style={styles.summaryIconCircle}>
-              <Ionicons
-                name={remainingBalance === 0 ? "happy" : "alert-circle"}
-                size={24}
-                color={remainingBalance === 0 ? "#4caf50" : "#f97316"}
-              />
+            <View style={styles.cardLeft}>
+              <View style={styles.summaryIconCircle}>
+                <Ionicons
+                  name={remainingBalance === 0 ? "happy" : "alert-circle"}
+                  size={24}
+                  color={remainingBalance === 0 ? "#4caf50" : "#f97316"}
+                />
+              </View>
+              <View>
+                <Text style={styles.summaryLabel}>Remaining</Text>
+                <Text style={styles.summaryValue}>
+                  {hasFees ? `₱${remainingBalance.toLocaleString()}` : "—"}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.summaryLabel}>Remaining</Text>
-            <Text style={styles.summaryValue}>
-              {hasFees ? `₱${remainingBalance.toLocaleString()}` : "—"}
-            </Text>
+            <PaymentStatus
+              breakdown={breakdown}
+              remainingBalance={remainingBalance}
+            />
           </LinearGradient>
         </ScrollView>
+
+        {/* Dot indicators */}
+        <View style={styles.dotsContainer}>
+          {[0, 1, 2].map((index) => (
+            <View
+              key={index}
+              style={[
+                styles.dot,
+                activeCardIndex === index
+                  ? [styles.dotActive, { backgroundColor: colors.brand }]
+                  : [styles.dotInactive, { backgroundColor: colors.textMuted }],
+              ]}
+            />
+          ))}
+        </View>
       </View>
 
       {/* Quick Actions */}
@@ -334,7 +582,6 @@ export default function HomeScreen({ navigation }) {
         <Text style={[styles.sectionTitle, { color: colors.brand }]}>
           Quick Actions
         </Text>
-
         {[
           {
             bg: "rgb(244,180,20)",
@@ -477,6 +724,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgb(244,180,20)",
   },
+
   clearanceCard: {
     marginTop: -20,
     marginHorizontal: 20,
@@ -501,35 +749,87 @@ const styles = StyleSheet.create({
   clearanceInfo: { flex: 1 },
   clearanceTitle: { fontSize: 16, marginBottom: 4 },
   clearanceStatus: { fontSize: 28, fontWeight: "700" },
-  summaryCardsContainer: { marginTop: 20, marginBottom: 10 },
-  summaryCardsScroll: { paddingHorizontal: 20, gap: 12 },
+
+  summaryCardsContainer: { marginTop: 20, marginBottom: 6 },
+  summaryCardsScroll: { paddingHorizontal: 20, gap: 16 },
   summaryCard: {
-    width: 140,
-    height: 130,
-    borderRadius: 20,
-    padding: 16,
+    height: 150,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
   },
+  cardLeft: { flex: 1, justifyContent: "space-between", height: "100%" },
   summaryIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 8,
   },
   summaryLabel: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.9)",
+    fontSize: 13,
+    color: "rgba(255,255,255,0.85)",
     fontWeight: "500",
   },
-  summaryValue: { fontSize: 18, fontWeight: "bold", color: "#fff" },
+  summaryValue: { fontSize: 24, fontWeight: "bold", color: "#fff" },
+
+  // Donut Ring
+  ringPct: { fontSize: 15, fontWeight: "800", color: "#fff" },
+  ringSub: { fontSize: 9, color: "rgba(255,255,255,0.75)", marginTop: 1 },
+
+  // Breakdown Bars
+  barsWrap: { width: 115, gap: 8 },
+  barRow: { gap: 3 },
+  barLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  barLabel: { fontSize: 9, color: "rgba(255,255,255,0.85)", fontWeight: "600" },
+  barAmt: { fontSize: 9, color: "rgba(255,255,255,0.7)" },
+  barTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    overflow: "hidden",
+  },
+  barFill: { height: "100%", borderRadius: 3, backgroundColor: "#fff" },
+
+  // Payment Status (Card 3)
+  statusWrap: { alignItems: "center", gap: 4 },
+  statusLabel: { fontSize: 11, fontWeight: "700" },
+  dueStat: { alignItems: "center" },
+  dueVal: { fontSize: 16, fontWeight: "800", color: "#fff" },
+  dueLbl: { fontSize: 9, color: "rgba(255,255,255,0.7)", marginTop: 1 },
+  dueDivider: {
+    width: 40,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    marginVertical: 2,
+  },
+
+  // Dots
+  dotsContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 6,
+  },
+  dot: { borderRadius: 4, height: 7 },
+  dotActive: { width: 22 },
+  dotInactive: { width: 7, opacity: 0.4 },
+
+  // Quick Actions
   quickActions: { padding: 20 },
   sectionTitle: {
     fontSize: 22,

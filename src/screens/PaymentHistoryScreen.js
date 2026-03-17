@@ -270,7 +270,7 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
             ) : (
               <>
                 <Ionicons name="download-outline" size={20} color="#fff" />
-                <Text style={modalStyles.downloadText}>Download PDF</Text>
+                <Text style={modalStyles.downloadText}>Download Receipt</Text>
               </>
             )}
           </TouchableOpacity>
