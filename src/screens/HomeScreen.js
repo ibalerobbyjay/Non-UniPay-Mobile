@@ -21,8 +21,9 @@ const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 40;
 const CARD_INTERVAL = CARD_WIDTH + 16;
 const AUTO_SWIPE_DELAY = 5000;
+const POLL_INTERVAL = 30000; // ← increased from 5s → 30s to avoid 429
 
-// ─── Donut Ring (pure RN — no SVG library) ────────────────────────────────
+// ─── Donut Ring ───────────────────────────────────────────────────────────
 function DonutRing({ percentage }) {
   const pct = isNaN(percentage) ? 0 : Math.min(Math.max(percentage, 0), 100);
   const size = 76;
@@ -133,20 +134,14 @@ function DonutRing({ percentage }) {
   );
 }
 
-// ─── Breakdown Bars (Card 2) ───────────────────────────────────────────────
-// API shape: breakdown.tuition.total, breakdown.miscellaneous.total, breakdown.exam.total
-// breakdown.total_paid is the total amount paid across all categories
+// ─── Breakdown Bars ───────────────────────────────────────────────────────
 function BreakdownBars({ breakdown }) {
-  const grandTotal = breakdown?.grand_total || 0;
   const totalPaid = parseFloat(breakdown?.total_paid || 0);
-
   const categories = [
     { label: "Tuition", total: breakdown?.tuition?.total || 0 },
     { label: "Miscellaneous", total: breakdown?.miscellaneous?.total || 0 },
     { label: "Exam", total: breakdown?.exam?.total || 0 },
   ];
-
-  // Distribute paid amount across categories proportionally (largest first)
   let remaining = totalPaid;
   const withPaid = categories.map((cat) => {
     const catPaid = Math.min(remaining, cat.total);
@@ -154,7 +149,6 @@ function BreakdownBars({ breakdown }) {
     const pct = cat.total > 0 ? (catPaid / cat.total) * 100 : 0;
     return { ...cat, pct };
   });
-
   return (
     <View style={styles.barsWrap}>
       {withPaid.map((cat) => (
@@ -174,19 +168,25 @@ function BreakdownBars({ breakdown }) {
   );
 }
 
-// ─── Payment Status Card (Card 3) ─────────────────────────────────────────
-// Uses breakdown.status ("paid", "partial", "unpaid") + remaining_balance
+// ─── Payment Status ───────────────────────────────────────────────────────
 function PaymentStatus({ breakdown, remainingBalance }) {
-  const status = breakdown?.status || "unpaid";
   const grandTotal = breakdown?.grand_total || 0;
   const totalPaid = parseFloat(breakdown?.total_paid || 0);
+  const balance = remainingBalance ?? breakdown?.remaining_balance ?? 0;
+  const hasFees = grandTotal > 0;
 
-  const statusConfig = {
-    paid: { label: "Fully Paid", icon: "checkmark-circle", color: "#4ade80" },
-    partial: { label: "Partial", icon: "time", color: "#fbbf24" },
-    unpaid: { label: "Not Paid", icon: "close-circle", color: "#f87171" },
-  };
-  const cfg = statusConfig[status] || statusConfig.unpaid;
+  let cfg;
+  if (!hasFees || totalPaid === 0) {
+    cfg = { label: "Not Paid", icon: "close-circle", color: "#f87171" };
+  } else if (balance <= 0) {
+    cfg = { label: "Fully Paid", icon: "checkmark-circle", color: "#4ade80" };
+  } else {
+    cfg = { label: "Partial", icon: "time", color: "#fbbf24" };
+  }
+  const pct =
+    grandTotal > 0
+      ? Math.min(Math.round((totalPaid / grandTotal) * 100), 100)
+      : 0;
 
   return (
     <View style={styles.statusWrap}>
@@ -196,18 +196,29 @@ function PaymentStatus({ breakdown, remainingBalance }) {
       </Text>
       <View style={styles.dueDivider} />
       <View style={styles.dueStat}>
-        <Text style={styles.dueVal}>
-          {grandTotal > 0
-            ? `${Math.round((totalPaid / grandTotal) * 100)}%`
-            : "0%"}
-        </Text>
+        <Text style={styles.dueVal}>{pct}%</Text>
         <Text style={styles.dueLbl}>of total</Text>
       </View>
     </View>
   );
 }
 
-// ─── Main Screen ───────────────────────────────────────────────────────────
+// ─── Exam Period Accent ───────────────────────────────────────────────────
+function examPeriodAccent(name) {
+  if (!name) return { bg: "rgba(255,255,255,0.15)", text: "#fff" };
+  const n = name.toLowerCase();
+  if (n.includes("prelim"))
+    return { bg: "rgba(99,102,241,0.25)", text: "#c7d2fe" };
+  if (n.includes("midterm"))
+    return { bg: "rgba(234,179,8,0.25)", text: "#fef08a" };
+  if (n.includes("semi"))
+    return { bg: "rgba(249,115,22,0.25)", text: "#fed7aa" };
+  if (n.includes("final"))
+    return { bg: "rgba(34,197,94,0.25)", text: "#bbf7d0" };
+  return { bg: "rgba(255,255,255,0.15)", text: "#fff" };
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }) {
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
@@ -219,6 +230,7 @@ export default function HomeScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
   const [clearance, setClearance] = useState(null);
   const [breakdown, setBreakdown] = useState(null);
+  const [examPeriod, setExamPeriod] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
@@ -229,38 +241,78 @@ export default function HomeScreen({ navigation }) {
   const currentIndex = useRef(0);
   const direction = useRef(1);
   const isUserScrolling = useRef(false);
+  const isFetching = useRef(false); // ← prevent overlapping requests
+  const pollTimer = useRef(null);
 
   const TOTAL_CARDS = 3;
 
-  const loadData = useCallback(async () => {
+  // ── Core loader (accepts optional AbortController signal) ─────────────
+  const loadData = useCallback(async (signal) => {
+    if (isFetching.current) return; // skip if previous call still in-flight
+    isFetching.current = true;
+
     try {
-      const [profileRes, clearanceRes, breakdownRes, unreadRes] =
+      const opts = signal ? { signal } : {};
+
+      const [profileRes, clearanceRes, breakdownRes, unreadRes, examPeriodRes] =
         await Promise.all([
-          api.get("/student/profile"),
-          api.get("/clearance"),
-          api.get("/fees/breakdown"),
-          api.get("/notifications/unread-count"),
+          api.get("/student/profile", opts),
+          api.get("/clearance", opts),
+          api.get("/fees/breakdown", opts),
+          api.get("/notifications/unread-count", opts),
+          api.get("/exam-period/current", opts).catch(() => ({
+            data: { exam_period: null, semester: null, school_year: null },
+          })),
         ]);
+
       setProfile(profileRes.data);
       setClearance(clearanceRes.data);
       setBreakdown(breakdownRes.data.breakdown);
       setUnreadCount(unreadRes.data.count);
+      setExamPeriod(examPeriodRes.data);
     } catch (error) {
-      console.error("Error loading data:", error);
+      // Silently ignore abort/cancel (screen blur or unmount)
+      if (
+        error?.code === "ERR_CANCELED" ||
+        error?.name === "CanceledError" ||
+        error?.message?.includes("canceled")
+      )
+        return;
+      console.warn("HomeScreen loadData:", error?.message ?? error);
+    } finally {
+      isFetching.current = false;
     }
   }, []);
 
+  // ── Polling helpers ───────────────────────────────────────────────────
+  const stopPolling = useCallback(() => {
+    if (pollTimer.current) {
+      clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+  }, []);
+
+  const startPolling = useCallback(() => {
+    stopPolling();
+    pollTimer.current = setInterval(() => {
+      loadData(); // no signal — interval fires when screen is focused
+    }, POLL_INTERVAL);
+  }, [loadData, stopPolling]);
+
+  // Load once + start poll when focused; cancel + stop when blurred
   useFocusEffect(
     useCallback(() => {
-      loadData();
-    }, [loadData]),
+      const controller = new AbortController();
+      loadData(controller.signal);
+      startPolling();
+      return () => {
+        controller.abort();
+        stopPolling();
+      };
+    }, [loadData, startPolling, stopPolling]),
   );
-  useFocusEffect(
-    useCallback(() => {
-      const interval = setInterval(loadData, 5000);
-      return () => clearInterval(interval);
-    }, [loadData]),
-  );
+
+  // Payment success param
   useFocusEffect(
     useCallback(() => {
       if (route.params?.paymentSuccess) {
@@ -271,6 +323,7 @@ export default function HomeScreen({ navigation }) {
     }, [route.params?.paymentSuccess, loadData, navigation]),
   );
 
+  // ── Auto-swipe ────────────────────────────────────────────────────────
   const startAutoSwipe = useCallback(() => {
     if (autoSwipeTimer.current) clearInterval(autoSwipeTimer.current);
     autoSwipeTimer.current = setInterval(() => {
@@ -299,12 +352,14 @@ export default function HomeScreen({ navigation }) {
     };
   }, [startAutoSwipe]);
 
+  // ── Pull-to-refresh ───────────────────────────────────────────────────
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
   };
 
+  // ── Derived values ────────────────────────────────────────────────────
   const hasFees =
     [
       ...(breakdown?.tuition?.fees || []),
@@ -339,6 +394,9 @@ export default function HomeScreen({ navigation }) {
     setActiveCardIndex(clamped);
   };
 
+  const epAccent = examPeriodAccent(examPeriod?.exam_period);
+
+  // ── Render ────────────────────────────────────────────────────────────
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -359,12 +417,78 @@ export default function HomeScreen({ navigation }) {
       >
         <View style={styles.overlayPattern} />
         <View style={styles.headerContent}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.greeting}>{user?.name}</Text>
             <Text style={styles.studentNo}>
               {profile?.student_no || "Loading..."}
             </Text>
+
+            {/* Exam Period Pill */}
+            <View style={styles.examPeriodRow}>
+              {examPeriod?.exam_period ? (
+                <View
+                  style={[
+                    styles.examPeriodPill,
+                    { backgroundColor: epAccent.bg },
+                  ]}
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={12}
+                    color={epAccent.text}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text
+                    style={[
+                      styles.examPeriodPillText,
+                      { color: epAccent.text },
+                    ]}
+                  >
+                    {examPeriod.exam_period}
+                  </Text>
+                  {examPeriod.semester && (
+                    <Text
+                      style={[
+                        styles.examPeriodPillSep,
+                        { color: epAccent.text },
+                      ]}
+                    >
+                      {" · "}
+                      {examPeriod.semester}
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <View
+                  style={[
+                    styles.examPeriodPill,
+                    { backgroundColor: "rgba(255,255,255,0.12)" },
+                  ]}
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={12}
+                    color="rgba(255,255,255,0.6)"
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text
+                    style={[
+                      styles.examPeriodPillText,
+                      { color: "rgba(255,255,255,0.6)" },
+                    ]}
+                  >
+                    No exam period set
+                  </Text>
+                </View>
+              )}
+              {examPeriod?.school_year && (
+                <Text style={styles.schoolYearText}>
+                  {examPeriod.school_year}
+                </Text>
+              )}
+            </View>
           </View>
+
           <View style={styles.headerRight}>
             <TouchableOpacity
               onPress={() => navigation.navigate("Notifications")}
@@ -460,6 +584,26 @@ export default function HomeScreen({ navigation }) {
               </Text>
             )}
           </View>
+          {examPeriod?.exam_period && (
+            <View style={styles.clearanceExamBadge}>
+              <Text
+                style={[
+                  styles.clearanceExamBadgeLabel,
+                  { color: colors.textMuted },
+                ]}
+              >
+                Period
+              </Text>
+              <Text
+                style={[
+                  styles.clearanceExamBadgeValue,
+                  { color: colors.brand },
+                ]}
+              >
+                {examPeriod.exam_period}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -486,7 +630,7 @@ export default function HomeScreen({ navigation }) {
           }}
           onMomentumScrollEnd={handleCardScroll}
         >
-          {/* Card 1 — Total Fees + Donut Ring (% paid) */}
+          {/* Card 1 — Total Fees */}
           <LinearGradient
             colors={[colors.gradientStart, colors.gradientEnd]}
             start={{ x: 0, y: 0 }}
@@ -502,12 +646,17 @@ export default function HomeScreen({ navigation }) {
                 <Text style={styles.summaryValue}>
                   ₱{totalDue.toLocaleString()}
                 </Text>
+                {examPeriod?.exam_period && (
+                  <Text style={styles.cardExamPeriodHint}>
+                    {examPeriod.exam_period} · {examPeriod.semester ?? ""}
+                  </Text>
+                )}
               </View>
             </View>
             <DonutRing percentage={paidPercentage} />
           </LinearGradient>
 
-          {/* Card 2 — Total Paid + Breakdown Bars */}
+          {/* Card 2 — Total Paid */}
           <LinearGradient
             colors={[colors.gradientStart, colors.gradientEnd]}
             start={{ x: 0, y: 0 }}
@@ -528,7 +677,7 @@ export default function HomeScreen({ navigation }) {
             <BreakdownBars breakdown={breakdown} />
           </LinearGradient>
 
-          {/* Card 3 — Remaining + Payment Status */}
+          {/* Card 3 — Remaining */}
           <LinearGradient
             colors={
               remainingBalance === 0
@@ -561,7 +710,7 @@ export default function HomeScreen({ navigation }) {
           </LinearGradient>
         </ScrollView>
 
-        {/* Dot indicators */}
+        {/* Dots */}
         <View style={styles.dotsContainer}>
           {[0, 1, 2].map((index) => (
             <View
@@ -687,7 +836,7 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     zIndex: 2,
   },
   greeting: {
@@ -696,8 +845,28 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginBottom: 4,
   },
-  studentNo: { fontSize: 16, color: "rgba(255,255,255,0.9)" },
-  headerRight: { flexDirection: "row", alignItems: "center" },
+  studentNo: { fontSize: 16, color: "rgba(255,255,255,0.9)", marginBottom: 8 },
+  examPeriodRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
+  },
+  examPeriodPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  examPeriodPillText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
+  examPeriodPillSep: { fontSize: 11, fontWeight: "500" },
+  schoolYearText: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.55)",
+    fontWeight: "500",
+  },
+  headerRight: { flexDirection: "row", alignItems: "center", paddingTop: 4 },
   notificationBadge: { marginRight: 15, padding: 5, position: "relative" },
   badge: {
     position: "absolute",
@@ -749,6 +918,25 @@ const styles = StyleSheet.create({
   clearanceInfo: { flex: 1 },
   clearanceTitle: { fontSize: 16, marginBottom: 4 },
   clearanceStatus: { fontSize: 28, fontWeight: "700" },
+  clearanceExamBadge: {
+    alignItems: "center",
+    paddingLeft: 12,
+    borderLeftWidth: 1,
+    borderLeftColor: "rgba(0,0,0,0.08)",
+    minWidth: 64,
+  },
+  clearanceExamBadgeLabel: {
+    fontSize: 10,
+    fontWeight: "500",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  clearanceExamBadgeValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+  },
 
   summaryCardsContainer: { marginTop: 20, marginBottom: 6 },
   summaryCardsScroll: { paddingHorizontal: 20, gap: 16 },
@@ -781,12 +969,16 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   summaryValue: { fontSize: 24, fontWeight: "bold", color: "#fff" },
+  cardExamPeriodHint: {
+    fontSize: 10,
+    color: "rgba(255,255,255,0.6)",
+    marginTop: 2,
+    fontWeight: "500",
+  },
 
-  // Donut Ring
   ringPct: { fontSize: 15, fontWeight: "800", color: "#fff" },
   ringSub: { fontSize: 9, color: "rgba(255,255,255,0.75)", marginTop: 1 },
 
-  // Breakdown Bars
   barsWrap: { width: 115, gap: 8 },
   barRow: { gap: 3 },
   barLabelRow: {
@@ -804,7 +996,6 @@ const styles = StyleSheet.create({
   },
   barFill: { height: "100%", borderRadius: 3, backgroundColor: "#fff" },
 
-  // Payment Status (Card 3)
   statusWrap: { alignItems: "center", gap: 4 },
   statusLabel: { fontSize: 11, fontWeight: "700" },
   dueStat: { alignItems: "center" },
@@ -817,7 +1008,6 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
 
-  // Dots
   dotsContainer: {
     flexDirection: "row",
     justifyContent: "center",
@@ -829,7 +1019,6 @@ const styles = StyleSheet.create({
   dotActive: { width: 22 },
   dotInactive: { width: 7, opacity: 0.4 },
 
-  // Quick Actions
   quickActions: { padding: 20 },
   sectionTitle: {
     fontSize: 22,

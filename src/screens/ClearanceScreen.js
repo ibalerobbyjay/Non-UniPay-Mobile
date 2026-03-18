@@ -24,7 +24,7 @@ export default function ClearanceScreen({ navigation }) {
 
   const [clearance, setClearance] = useState(null);
   const [breakdown, setBreakdown] = useState(null);
-  const [currentExamPeriod, setCurrentExamPeriod] = useState(null);
+  const [examPeriodData, setExamPeriodData] = useState(null); // { exam_period, semester, school_year }
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -39,11 +39,12 @@ export default function ClearanceScreen({ navigation }) {
       const [clearanceRes, breakdownRes, examPeriodRes] = await Promise.all([
         api.get("/clearance"),
         api.get("/fees/breakdown"),
-        api.get("/current-exam-period"),
+        // Use the same endpoint as HomeScreen for consistency
+        api.get("/exam-period/current").catch(() => ({ data: {} })),
       ]);
       setClearance(clearanceRes.data);
       setBreakdown(breakdownRes.data.breakdown);
-      setCurrentExamPeriod(examPeriodRes.data.exam_period);
+      setExamPeriodData(examPeriodRes.data); // { exam_period, semester, school_year }
     } catch (error) {
       console.error("Error loading clearance:", error);
     } finally {
@@ -78,6 +79,10 @@ export default function ClearanceScreen({ navigation }) {
       ...(breakdown?.exam?.fees || []),
     ].length > 0;
 
+  const currentExamPeriod = examPeriodData?.exam_period ?? null;
+  const currentSemester = examPeriodData?.semester ?? null;
+  const currentSchoolYear = examPeriodData?.school_year ?? null;
+
   let statusIcon = "help-circle";
   let iconColor = colors.textMuted;
   let statusText = "";
@@ -100,12 +105,13 @@ export default function ClearanceScreen({ navigation }) {
     statusMessage = "Please settle your fees to get clearance";
   }
 
+  // Prefer data from the exam period API; fall back to first fee's fields
   const firstFee =
     breakdown?.tuition?.fees?.[0] ||
     breakdown?.miscellaneous?.fees?.[0] ||
     breakdown?.exam?.fees?.[0];
-  const schoolYear = firstFee?.school_year || "N/A";
-  const semester = firstFee?.semester || "N/A";
+  const schoolYear = currentSchoolYear || firstFee?.school_year || "N/A";
+  const semester = currentSemester || firstFee?.semester || "N/A";
 
   const detailRows = [
     ["person-outline", "Student Name", user?.name || "N/A"],
@@ -126,6 +132,19 @@ export default function ClearanceScreen({ navigation }) {
       : []),
   ];
 
+  // Exam period accent color for the header pill
+  const epColor = currentExamPeriod
+    ? currentExamPeriod.toLowerCase().includes("prelim")
+      ? "#818cf8"
+      : currentExamPeriod.toLowerCase().includes("midterm")
+        ? "#f59e0b"
+        : currentExamPeriod.toLowerCase().includes("semi")
+          ? "#f97316"
+          : currentExamPeriod.toLowerCase().includes("final")
+            ? "#22c55e"
+            : "rgba(255,255,255,0.7)"
+    : null;
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -137,7 +156,7 @@ export default function ClearanceScreen({ navigation }) {
         />
       }
     >
-      {/* Gradient Header */}
+      {/* ── Gradient Header ── */}
       <LinearGradient
         colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
@@ -145,9 +164,53 @@ export default function ClearanceScreen({ navigation }) {
         style={styles.headerGradient}
       >
         <Text style={styles.headerTitle}>Exam Clearance</Text>
+
+        {/* Exam period pill in header */}
+        <View style={styles.headerMeta}>
+          {currentExamPeriod ? (
+            <View
+              style={[
+                styles.epPill,
+                {
+                  backgroundColor: `${epColor}30`,
+                  borderColor: `${epColor}60`,
+                },
+              ]}
+            >
+              <Ionicons
+                name="time-outline"
+                size={12}
+                color={epColor}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.epPillText, { color: epColor }]}>
+                {currentExamPeriod}
+              </Text>
+              {currentSemester && (
+                <Text style={[styles.epPillSep, { color: epColor }]}>
+                  {" · "}
+                  {currentSemester}
+                </Text>
+              )}
+            </View>
+          ) : (
+            <View style={styles.epPillNone}>
+              <Ionicons
+                name="time-outline"
+                size={12}
+                color="rgba(255,255,255,0.5)"
+                style={{ marginRight: 4 }}
+              />
+              <Text style={styles.epPillNoneText}>No exam period set</Text>
+            </View>
+          )}
+          {currentSchoolYear && (
+            <Text style={styles.headerSchoolYear}>{currentSchoolYear}</Text>
+          )}
+        </View>
       </LinearGradient>
 
-      {/* Status Card */}
+      {/* ── Status Card ── */}
       <View
         style={[
           styles.statusCard,
@@ -172,7 +235,7 @@ export default function ClearanceScreen({ navigation }) {
         </Text>
       </View>
 
-      {/* Clearance Details Card */}
+      {/* ── Clearance Details Card ── */}
       <View
         style={[
           styles.detailsCard,
@@ -214,6 +277,67 @@ export default function ClearanceScreen({ navigation }) {
           </View>
         ))}
       </View>
+
+      {/* ── Fee Summary (balance) ── */}
+      {hasFees && (
+        <View
+          style={[
+            styles.balanceCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.borderLight,
+            },
+          ]}
+        >
+          <View style={styles.balanceRow}>
+            <Text
+              style={[styles.balanceLabel, { color: colors.textSecondary }]}
+            >
+              Grand Total
+            </Text>
+            <Text style={[styles.balanceValue, { color: colors.textPrimary }]}>
+              ₱{(breakdown?.grand_total || 0).toLocaleString()}
+            </Text>
+          </View>
+          <View style={styles.balanceRow}>
+            <Text
+              style={[styles.balanceLabel, { color: colors.textSecondary }]}
+            >
+              Total Paid
+            </Text>
+            <Text style={[styles.balanceValue, { color: "#22c55e" }]}>
+              ₱{parseFloat(breakdown?.total_paid || 0).toLocaleString()}
+            </Text>
+          </View>
+          <View
+            style={[styles.balanceDivider, { borderColor: colors.border }]}
+          />
+          <View style={styles.balanceRow}>
+            <Text
+              style={[
+                styles.balanceLabel,
+                { color: colors.textPrimary, fontWeight: "700" },
+              ]}
+            >
+              Balance Due
+            </Text>
+            <Text
+              style={[
+                styles.balanceValue,
+                {
+                  color:
+                    (breakdown?.remaining_balance ?? 0) === 0
+                      ? "#22c55e"
+                      : "#ef4444",
+                  fontSize: 18,
+                },
+              ]}
+            >
+              ₱{(breakdown?.remaining_balance ?? 0).toLocaleString()}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* ── Note Card: Pending ── */}
       {hasFees && !isCleared && (
@@ -355,6 +479,8 @@ export default function ClearanceScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+
+  // Header
   headerGradient: {
     paddingTop: 60,
     paddingBottom: 30,
@@ -367,7 +493,44 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
-  headerTitle: { fontSize: 28, fontWeight: "bold", color: "#fff" },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#fff",
+    marginBottom: 8,
+  },
+  headerMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  headerSchoolYear: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.55)",
+    fontWeight: "500",
+  },
+  epPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  epPillText: { fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
+  epPillSep: { fontSize: 12, fontWeight: "500" },
+  epPillNone: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  epPillNoneText: { fontSize: 12, color: "rgba(255,255,255,0.5)" },
+
+  // Status Card
   statusCard: {
     marginTop: -20,
     marginHorizontal: 20,
@@ -397,6 +560,8 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 28, fontWeight: "bold", marginBottom: 8 },
   statusMessage: { fontSize: 16, textAlign: "center", lineHeight: 22 },
+
+  // Details Card
   detailsCard: {
     marginHorizontal: 20,
     marginTop: 20,
@@ -425,6 +590,31 @@ const styles = StyleSheet.create({
   detailTextContainer: { flex: 1, marginLeft: 12 },
   detailLabel: { fontSize: 14, marginBottom: 2 },
   detailValue: { fontSize: 16, fontWeight: "600" },
+
+  // Balance Card
+  balanceCard: {
+    marginHorizontal: 20,
+    marginTop: 16,
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  balanceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 5,
+  },
+  balanceDivider: { borderTopWidth: 1, marginVertical: 8 },
+  balanceLabel: { fontSize: 14 },
+  balanceValue: { fontSize: 16, fontWeight: "700" },
+
+  // Note Cards
   noteCard: {
     marginHorizontal: 20,
     marginTop: 16,

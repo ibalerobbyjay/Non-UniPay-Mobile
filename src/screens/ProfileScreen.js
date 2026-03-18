@@ -141,7 +141,6 @@ function LegalModal({ visible, onClose, title, sections }) {
     >
       <View style={[modalStyles.overlay, { backgroundColor: colors.overlay }]}>
         <View style={[modalStyles.sheet, { backgroundColor: colors.surface }]}>
-          {/* Header */}
           <LinearGradient
             colors={[colors.gradientStart, colors.gradientEnd]}
             start={{ x: 0, y: 0 }}
@@ -154,7 +153,6 @@ function LegalModal({ visible, onClose, title, sections }) {
             </TouchableOpacity>
           </LinearGradient>
 
-          {/* Scrollable content */}
           <ScrollView
             style={modalStyles.body}
             contentContainerStyle={modalStyles.bodyContent}
@@ -179,7 +177,6 @@ function LegalModal({ visible, onClose, title, sections }) {
             ))}
           </ScrollView>
 
-          {/* Footer close button */}
           <View
             style={[
               modalStyles.footer,
@@ -197,6 +194,77 @@ function LegalModal({ visible, onClose, title, sections }) {
               onPress={onClose}
             >
               <Text style={modalStyles.closeFooterText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Logout Confirmation Modal ────────────────────────────────────────────────
+function LogoutModal({ visible, onConfirm, onCancel, colors }) {
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onCancel}
+      statusBarTranslucent
+    >
+      <View style={logoutModalStyles.overlay}>
+        <View
+          style={[logoutModalStyles.card, { backgroundColor: colors.surface }]}
+        >
+          {/* Icon */}
+          <View style={logoutModalStyles.iconWrap}>
+            <View style={logoutModalStyles.iconCircle}>
+              <Ionicons name="log-out-outline" size={36} color="#f44336" />
+            </View>
+          </View>
+
+          {/* Text */}
+          <Text
+            style={[logoutModalStyles.title, { color: colors.textPrimary }]}
+          >
+            Logout
+          </Text>
+          <Text
+            style={[logoutModalStyles.message, { color: colors.textSecondary }]}
+          >
+            Are you sure you want to log out of your account?
+          </Text>
+
+          {/* Buttons */}
+          <View style={logoutModalStyles.buttonRow}>
+            <TouchableOpacity
+              style={[
+                logoutModalStyles.btn,
+                logoutModalStyles.cancelBtn,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceSecondary,
+                },
+              ]}
+              onPress={onCancel}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  logoutModalStyles.cancelText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Cancel
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[logoutModalStyles.btn, logoutModalStyles.confirmBtn]}
+              onPress={onConfirm}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#fff" />
+              <Text style={logoutModalStyles.confirmText}>Logout</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -244,6 +312,7 @@ export default function ProfileScreen({ navigation }) {
   // Modals
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const loadProfile = async () => {
     try {
@@ -451,16 +520,15 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Logout", onPress: logout, style: "destructive" },
-    ]);
+  // Opens the custom logout modal instead of the native Alert
+  const handleLogout = () => setShowLogoutModal(true);
+
+  const confirmLogout = () => {
+    setShowLogoutModal(false);
+    logout();
   };
 
   const strength = getPasswordStrength(passwordForm.new_password);
-
-  // ─── Dynamic styles based on theme ────────────────────────────────────────
   const s = makeStyles(colors);
 
   return (
@@ -548,7 +616,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
 
             {cooldownMessage && !editing && (
-              <View style={[s.cooldownBanner]}>
+              <View style={s.cooldownBanner}>
                 <Ionicons
                   name="time-outline"
                   size={18}
@@ -728,7 +796,6 @@ export default function ProfileScreen({ navigation }) {
 
             {changingPassword && (
               <View style={s.passwordForm}>
-                {/* Current Password */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Current Password</Text>
                   <View style={s.passwordInputWrapper}>
@@ -759,7 +826,6 @@ export default function ProfileScreen({ navigation }) {
                   </View>
                 </View>
 
-                {/* New Password */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>New Password</Text>
                   <View style={s.passwordInputWrapper}>
@@ -815,7 +881,6 @@ export default function ProfileScreen({ navigation }) {
                   )}
                 </View>
 
-                {/* Confirm Password */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Confirm New Password</Text>
                   <View
@@ -936,7 +1001,7 @@ export default function ProfileScreen({ navigation }) {
                 value={isDark}
                 onValueChange={toggleTheme}
                 trackColor={{ false: colors.border, true: colors.brand }}
-                thumbColor={isDark ? "#fff" : "#fff"}
+                thumbColor="#fff"
                 ios_backgroundColor={colors.border}
               />
             </View>
@@ -1023,8 +1088,8 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Logout */}
-          <TouchableOpacity style={[s.logoutButton]} onPress={handleLogout}>
+          {/* Logout Button */}
+          <TouchableOpacity style={s.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color="#f44336" />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
@@ -1035,7 +1100,7 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* Modals */}
+      {/* Legal Modals */}
       <LegalModal
         visible={showPrivacy}
         onClose={() => setShowPrivacy(false)}
@@ -1047,6 +1112,14 @@ export default function ProfileScreen({ navigation }) {
         onClose={() => setShowTerms(false)}
         title="Terms of Service"
         sections={TERMS_CONTENT}
+      />
+
+      {/* Logout Confirmation Modal */}
+      <LogoutModal
+        visible={showLogoutModal}
+        onConfirm={confirmLogout}
+        onCancel={() => setShowLogoutModal(false)}
+        colors={colors}
       />
     </>
   );
@@ -1188,10 +1261,7 @@ function makeStyles(colors) {
 
 // ─── Modal Styles ─────────────────────────────────────────────────────────────
 const modalStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
+  overlay: { flex: 1, justifyContent: "flex-end" },
   sheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -1231,6 +1301,58 @@ const modalStyles = StyleSheet.create({
   },
   closeFooterBtn: { borderRadius: 30, padding: 16, alignItems: "center" },
   closeFooterText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+});
+
+// ─── Logout Modal Styles ──────────────────────────────────────────────────────
+const logoutModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  card: {
+    width: "100%",
+    borderRadius: 28,
+    padding: 28,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  iconWrap: { marginBottom: 16 },
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "rgba(244,67,54,0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  title: { fontSize: 22, fontWeight: "800", marginBottom: 8 },
+  message: {
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  buttonRow: { flexDirection: "row", gap: 12, width: "100%" },
+  btn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  cancelBtn: { borderWidth: 1 },
+  confirmBtn: { backgroundColor: "#f44336" },
+  cancelText: { fontSize: 15, fontWeight: "600" },
+  confirmText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 });
 
 // ─── Static Styles ────────────────────────────────────────────────────────────
