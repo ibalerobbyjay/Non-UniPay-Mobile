@@ -216,14 +216,11 @@ function LogoutModal({ visible, onConfirm, onCancel, colors }) {
         <View
           style={[logoutModalStyles.card, { backgroundColor: colors.surface }]}
         >
-          {/* Icon */}
           <View style={logoutModalStyles.iconWrap}>
             <View style={logoutModalStyles.iconCircle}>
               <Ionicons name="log-out-outline" size={36} color="#f44336" />
             </View>
           </View>
-
-          {/* Text */}
           <Text
             style={[logoutModalStyles.title, { color: colors.textPrimary }]}
           >
@@ -234,8 +231,6 @@ function LogoutModal({ visible, onConfirm, onCancel, colors }) {
           >
             Are you sure you want to log out of your account?
           </Text>
-
-          {/* Buttons */}
           <View style={logoutModalStyles.buttonRow}>
             <TouchableOpacity
               style={[
@@ -520,7 +515,6 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Opens the custom logout modal instead of the native Alert
   const handleLogout = () => setShowLogoutModal(true);
 
   const confirmLogout = () => {
@@ -543,7 +537,7 @@ export default function ProfileScreen({ navigation }) {
           />
         }
       >
-        {/* Header */}
+        {/* ── Header ── */}
         <LinearGradient
           colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
@@ -593,7 +587,7 @@ export default function ProfileScreen({ navigation }) {
         </LinearGradient>
 
         <View style={styles.content}>
-          {/* Student Information */}
+          {/* ── Student Information ── */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <Text style={s.sectionTitle}>Student Information</Text>
@@ -628,6 +622,7 @@ export default function ProfileScreen({ navigation }) {
 
             {editing ? (
               <View>
+                {/* Email */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Email</Text>
                   <TextInput
@@ -640,6 +635,8 @@ export default function ProfileScreen({ navigation }) {
                     color={colors.textPrimary}
                   />
                 </View>
+
+                {/* Contact */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Contact Number</Text>
                   <TextInput
@@ -653,21 +650,39 @@ export default function ProfileScreen({ navigation }) {
                     color={colors.textPrimary}
                   />
                 </View>
+
+                {/* ✅ Course Picker — dark mode aware */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Course</Text>
-                  <View style={s.pickerContainer}>
+                  <View
+                    style={[
+                      s.pickerContainer,
+                      { backgroundColor: colors.inputBackground },
+                    ]}
+                  >
                     <Picker
                       selectedValue={formData.course}
                       onValueChange={(v) =>
                         setFormData({ ...formData, course: v })
                       }
-                      style={[s.picker, { color: colors.textPrimary }]}
+                      style={[
+                        s.picker,
+                        {
+                          color: colors.textPrimary,
+                          backgroundColor: colors.inputBackground,
+                        },
+                      ]}
                       dropdownIconColor={colors.textSecondary}
+                      itemStyle={{
+                        color: colors.textPrimary,
+                        backgroundColor: colors.inputBackground,
+                      }}
                     >
                       <Picker.Item
                         label="Select Course"
                         value=""
-                        color={colors.textMuted}
+                        color={isDark ? "#94a3b8" : colors.textMuted}
+                        style={{ backgroundColor: colors.inputBackground }}
                       />
                       {COURSES.map((c) => (
                         <Picker.Item
@@ -675,26 +690,45 @@ export default function ProfileScreen({ navigation }) {
                           label={c}
                           value={c}
                           color={colors.textPrimary}
+                          style={{ backgroundColor: colors.inputBackground }}
                         />
                       ))}
                     </Picker>
                   </View>
                 </View>
+
+                {/* ✅ Year Level Picker — dark mode aware */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Year Level</Text>
-                  <View style={s.pickerContainer}>
+                  <View
+                    style={[
+                      s.pickerContainer,
+                      { backgroundColor: colors.inputBackground },
+                    ]}
+                  >
                     <Picker
                       selectedValue={formData.year_level}
                       onValueChange={(v) =>
                         setFormData({ ...formData, year_level: v })
                       }
-                      style={[s.picker, { color: colors.textPrimary }]}
+                      style={[
+                        s.picker,
+                        {
+                          color: colors.textPrimary,
+                          backgroundColor: colors.inputBackground,
+                        },
+                      ]}
                       dropdownIconColor={colors.textSecondary}
+                      itemStyle={{
+                        color: colors.textPrimary,
+                        backgroundColor: colors.inputBackground,
+                      }}
                     >
                       <Picker.Item
                         label="Select Year"
                         value=""
-                        color={colors.textMuted}
+                        color={isDark ? "#94a3b8" : colors.textMuted}
+                        style={{ backgroundColor: colors.inputBackground }}
                       />
                       {YEAR_LEVELS.map((y) => (
                         <Picker.Item
@@ -702,11 +736,13 @@ export default function ProfileScreen({ navigation }) {
                           label={`Year ${y}`}
                           value={y}
                           color={colors.textPrimary}
+                          style={{ backgroundColor: colors.inputBackground }}
                         />
                       ))}
                     </Picker>
                   </View>
                 </View>
+
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
                     style={[styles.button, s.cancelButton]}
@@ -751,7 +787,7 @@ export default function ProfileScreen({ navigation }) {
             )}
           </View>
 
-          {/* Account Security */}
+          {/* ── Account Security ── */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <View style={styles.sectionTitleRow}>
@@ -963,7 +999,7 @@ export default function ProfileScreen({ navigation }) {
             )}
           </View>
 
-          {/* Appearance */}
+          {/* ── Appearance ── */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <View style={styles.sectionTitleRow}>
@@ -1007,7 +1043,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Support & Legal */}
+          {/* ── Support & Legal ── */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <View style={styles.sectionTitleRow}>
@@ -1088,7 +1124,7 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Logout Button */}
+          {/* ── Logout ── */}
           <TouchableOpacity style={s.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color="#f44336" />
             <Text style={styles.logoutText}>Logout</Text>

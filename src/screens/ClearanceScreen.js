@@ -278,67 +278,6 @@ export default function ClearanceScreen({ navigation }) {
         ))}
       </View>
 
-      {/* ── Fee Summary (balance) ── */}
-      {hasFees && (
-        <View
-          style={[
-            styles.balanceCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.borderLight,
-            },
-          ]}
-        >
-          <View style={styles.balanceRow}>
-            <Text
-              style={[styles.balanceLabel, { color: colors.textSecondary }]}
-            >
-              Grand Total
-            </Text>
-            <Text style={[styles.balanceValue, { color: colors.textPrimary }]}>
-              ₱{(breakdown?.grand_total || 0).toLocaleString()}
-            </Text>
-          </View>
-          <View style={styles.balanceRow}>
-            <Text
-              style={[styles.balanceLabel, { color: colors.textSecondary }]}
-            >
-              Total Paid
-            </Text>
-            <Text style={[styles.balanceValue, { color: "#22c55e" }]}>
-              ₱{parseFloat(breakdown?.total_paid || 0).toLocaleString()}
-            </Text>
-          </View>
-          <View
-            style={[styles.balanceDivider, { borderColor: colors.border }]}
-          />
-          <View style={styles.balanceRow}>
-            <Text
-              style={[
-                styles.balanceLabel,
-                { color: colors.textPrimary, fontWeight: "700" },
-              ]}
-            >
-              Balance Due
-            </Text>
-            <Text
-              style={[
-                styles.balanceValue,
-                {
-                  color:
-                    (breakdown?.remaining_balance ?? 0) === 0
-                      ? "#22c55e"
-                      : "#ef4444",
-                  fontSize: 18,
-                },
-              ]}
-            >
-              ₱{(breakdown?.remaining_balance ?? 0).toLocaleString()}
-            </Text>
-          </View>
-        </View>
-      )}
-
       {/* ── Note Card: Pending ── */}
       {hasFees && !isCleared && (
         <View
