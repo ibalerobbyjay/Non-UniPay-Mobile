@@ -8,6 +8,7 @@ import {
   Animated,
   FlatList,
   RefreshControl,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -195,21 +196,23 @@ export default function NotificationsScreen() {
 
   const renderItem = ({ item }) => {
     const isSelected = selectedIds.has(item.id);
+
     return (
       <TouchableOpacity
         style={[
           styles.notificationItem,
-          { backgroundColor: colors.surface, borderColor: colors.borderLight },
-          !item.is_read &&
-            !isSelected && {
-              borderLeftWidth: 4,
-              borderLeftColor: colors.brand,
-              backgroundColor: colors.surfaceSecondary,
-            },
-          isSelected && {
-            borderWidth: 2,
-            borderColor: colors.brand,
-            backgroundColor: colors.brandLight,
+          {
+            backgroundColor: isSelected
+              ? colors.brandLight
+              : !item.is_read
+                ? colors.surfaceSecondary
+                : colors.surface,
+            borderColor: isSelected
+              ? colors.brand
+              : !item.is_read
+                ? colors.brand
+                : colors.borderLight,
+            borderWidth: 1, // Keep fixed so card size won't change
           },
         ]}
         onPress={() => handleNotificationPress(item)}
@@ -251,6 +254,7 @@ export default function NotificationsScreen() {
             </View>
           )}
         </View>
+
         <View style={styles.contentBlock}>
           {!item.is_read && !isSelected && (
             <View
@@ -271,13 +275,6 @@ export default function NotificationsScreen() {
           <Text style={[styles.timestamp, { color: colors.textMuted }]}>
             {formatDate(item.created_at)}
           </Text>
-          {!selectionMode &&
-            (item.type === "payment_success" ||
-              item.type === "payment_failed") && (
-              <Text style={[styles.tapHint, { color: colors.brand }]}>
-                Tap to view details
-              </Text>
-            )}
         </View>
       </TouchableOpacity>
     );
@@ -454,3 +451,150 @@ export default function NotificationsScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  headerGradient: {
+    paddingTop: 60,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    elevation: 8,
+    shadowColor: "#0f3c91",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerTitle: { fontSize: 22, fontWeight: "bold", color: "#fff", flex: 1 },
+  headerSubtitle: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.7)",
+    marginTop: 8,
+    paddingLeft: 52,
+  },
+  headerActions: { flexDirection: "row", gap: 8 },
+  markReadBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  clearBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(244,67,54,0.35)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  selectAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    gap: 6,
+  },
+  selectAllText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  listContent: { padding: 16, paddingBottom: 30 },
+  notificationItem: {
+    flexDirection: "row",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  itemLeft: {
+    marginRight: 14,
+    width: 48, // fixed width
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checkbox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  contentBlock: { flex: 1, position: "relative" },
+  unreadDot: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+  },
+  message: {
+    fontSize: 15,
+    fontWeight: "500",
+    marginBottom: 6,
+    lineHeight: 21,
+    paddingRight: 20,
+  },
+  timestamp: { fontSize: 12, marginBottom: 4 },
+  tapHint: { fontSize: 12, fontWeight: "500" },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 80,
+  },
+  emptyText: { marginTop: 16, fontSize: 16 },
+  selectionToolbar: { position: "absolute", bottom: 24, left: 16, right: 16 },
+  toolbarInner: {
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#0f3c91",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 12,
+    borderWidth: 1,
+  },
+  toolbarLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  toolbarCount: { fontSize: 15, fontWeight: "600" },
+  deleteSelectedBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ef4444",
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 30,
+    gap: 7,
+  },
+  deleteSelectedText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+});
