@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,16 +27,16 @@ export default function PaymentScreen({ navigation }) {
   const [selectedFees, setSelectedFees] = useState({});
   const [selectedTotal, setSelectedTotal] = useState(0);
   const [paidFeeIds, setPaidFeeIds] = useState(new Set());
-  const [pendingFeeIds, setPendingFeeIds] = useState(new Set()); // new: fees with pending payment
+  const [pendingFeeIds, setPendingFeeIds] = useState(new Set());
   const [loading, setLoading] = useState(false);
-  const [checkingStatus, setCheckingStatus] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Combined state for any ongoing payment process
-  const isProcessing = loading || checkingStatus;
+  const autoRefreshIntervalRef = useRef(null);
+  const isFirstLoad = useRef(true);
 
-  const loadData = async () => {
+  const loadData = useCallback(async ({ skipLoading = false } = {}) => {
+    if (!skipLoading) setFetching(true);
     try {
       const [feesRes, historyRes] = await Promise.all([
         api.get("/fees/breakdown"),
@@ -47,13 +47,12 @@ export default function PaymentScreen({ navigation }) {
 
       const payments = historyRes.data.payments || [];
       const paidFees = new Set();
-      const pendingFees = new Set(); // collect fee IDs from pending payments
+      const pendingFees = new Set();
 
       payments.forEach((payment) => {
         if (payment.status === "paid" && payment.fees) {
           payment.fees.forEach((fee) => paidFees.add(fee.id));
         } else if (payment.status === "pending" && payment.fees) {
-          // If the backend returns pending payments, add them
           payment.fees.forEach((fee) => pendingFees.add(fee.id));
         }
       });
@@ -64,26 +63,42 @@ export default function PaymentScreen({ navigation }) {
       console.error("Error loading data:", error);
       Alert.alert("Error", "Failed to load fee information");
     } finally {
-      setFetching(false);
+      if (!skipLoading) setFetching(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadData();
-    }, []),
+      if (isFirstLoad.current) {
+        loadData({ skipLoading: false });
+        isFirstLoad.current = false;
+      } else {
+        loadData({ skipLoading: true });
+      }
+
+      autoRefreshIntervalRef.current = setInterval(() => {
+        if (!loading) {
+          loadData({ skipLoading: true });
+        }
+      }, 5000);
+
+      return () => {
+        if (autoRefreshIntervalRef.current) {
+          clearInterval(autoRefreshIntervalRef.current);
+          autoRefreshIntervalRef.current = null;
+        }
+      };
+    }, [loadData, loading]),
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await loadData({ skipLoading: false });
   };
 
   const toggleFee = (feeId, amount) => {
-    // Prevent toggling if payment is in progress or fee is already pending/paid
-    if (isProcessing || paidFeeIds.has(feeId) || pendingFeeIds.has(feeId))
-      return;
+    if (loading || paidFeeIds.has(feeId) || pendingFeeIds.has(feeId)) return;
 
     setSelectedFees((prev) => {
       const newSelected = { ...prev };
@@ -134,12 +149,26 @@ export default function PaymentScreen({ navigation }) {
       });
       if (response.data.success) {
         const { payment_url, payment_id } = response.data;
+
+        // Mark these fees as pending immediately
+        setPendingFeeIds((prev) => new Set([...prev, ...feeIds]));
+        // Clear selected fees
+        setSelectedFees({});
+        setSelectedTotal(0);
+
         const supported = await Linking.canOpenURL(payment_url);
         if (supported) {
           await Linking.openURL(payment_url);
-          startStatusCheck(payment_id);
+          // The app will be backgrounded. When the user returns (via deep link),
+          // the screen will refresh (focus) and auto-refresh will pick up the updated status.
         } else {
           Alert.alert("Error", "Cannot open GCash payment page");
+          // Remove pending mark if we failed to open the URL
+          setPendingFeeIds((prev) => {
+            const newSet = new Set(prev);
+            feeIds.forEach((id) => newSet.delete(id));
+            return newSet;
+          });
         }
       } else {
         Alert.alert(
@@ -157,53 +186,12 @@ export default function PaymentScreen({ navigation }) {
     }
   };
 
-  const startStatusCheck = (paymentId) => {
-    setCheckingStatus(true);
-
-    // Increase polling interval to 10 seconds (as requested: "make the loading longer")
-    const interval = setInterval(async () => {
-      try {
-        const res = await api.get(`/payments/status/${paymentId}`);
-        const status = res.data.status;
-        if (status === "paid") {
-          clearInterval(interval);
-          setCheckingStatus(false);
-          Alert.alert(
-            "Payment Successful! 🎉",
-            "Your payment has been processed.",
-            [
-              {
-                text: "OK",
-                onPress: () => {
-                  // Clear selected fees after successful payment
-                  setSelectedFees({});
-                  setSelectedTotal(0);
-                  navigation.navigate("Home", { paymentSuccess: true });
-                },
-              },
-            ],
-          );
-        } else if (status === "failed") {
-          clearInterval(interval);
-          setCheckingStatus(false);
-          Alert.alert("Payment Failed ❌", "Please try again.");
-        }
-        // Keep polling for other statuses (e.g., 'pending')
-      } catch (err) {
-        clearInterval(interval);
-        setCheckingStatus(false);
-      }
-    }, 10000); // Increased from 5000 to 10000 ms
-  };
-
   const renderFeeItem = (fee, categoryColor) => {
     const isSelected = !!selectedFees[fee.id];
     const isPaid = paidFeeIds.has(fee.id);
     const isPending = pendingFeeIds.has(fee.id);
     const activeCategoryColor = categoryColor || colors.brand;
-
-    // Disable interaction if processing or if fee is already paid/pending
-    const isDisabled = isProcessing || isPaid || isPending;
+    const isDisabled = loading || isPaid || isPending;
 
     if (isPaid) {
       return (
@@ -313,7 +301,6 @@ export default function PaymentScreen({ navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <LinearGradient
         colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
@@ -399,7 +386,6 @@ export default function PaymentScreen({ navigation }) {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Footer */}
       <View
         style={[
           styles.footer,
@@ -418,12 +404,12 @@ export default function PaymentScreen({ navigation }) {
           style={[
             styles.payButton,
             { backgroundColor: colors.brand },
-            (isProcessing || selectedTotal === 0) && styles.payButtonDisabled,
+            (loading || selectedTotal === 0) && styles.payButtonDisabled,
           ]}
           onPress={handlePayment}
-          disabled={isProcessing || selectedTotal === 0}
+          disabled={loading || selectedTotal === 0}
         >
-          {isProcessing ? (
+          {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <>
@@ -437,7 +423,6 @@ export default function PaymentScreen({ navigation }) {
   );
 }
 
-// Styles remain unchanged
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
