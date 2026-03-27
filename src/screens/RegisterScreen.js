@@ -649,6 +649,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
     fontSize: 15,
+    color: "#000", // Ensures text is black (fixes invisible dots)
   },
   inputError: {
     borderWidth: 1,

@@ -27,10 +27,14 @@ export default function PaymentScreen({ navigation }) {
   const [selectedFees, setSelectedFees] = useState({});
   const [selectedTotal, setSelectedTotal] = useState(0);
   const [paidFeeIds, setPaidFeeIds] = useState(new Set());
+  const [pendingFeeIds, setPendingFeeIds] = useState(new Set()); // new: fees with pending payment
   const [loading, setLoading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Combined state for any ongoing payment process
+  const isProcessing = loading || checkingStatus;
 
   const loadData = async () => {
     try {
@@ -43,12 +47,19 @@ export default function PaymentScreen({ navigation }) {
 
       const payments = historyRes.data.payments || [];
       const paidFees = new Set();
+      const pendingFees = new Set(); // collect fee IDs from pending payments
+
       payments.forEach((payment) => {
         if (payment.status === "paid" && payment.fees) {
           payment.fees.forEach((fee) => paidFees.add(fee.id));
+        } else if (payment.status === "pending" && payment.fees) {
+          // If the backend returns pending payments, add them
+          payment.fees.forEach((fee) => pendingFees.add(fee.id));
         }
       });
+
       setPaidFeeIds(paidFees);
+      setPendingFeeIds(pendingFees);
     } catch (error) {
       console.error("Error loading data:", error);
       Alert.alert("Error", "Failed to load fee information");
@@ -70,7 +81,10 @@ export default function PaymentScreen({ navigation }) {
   };
 
   const toggleFee = (feeId, amount) => {
-    if (paidFeeIds.has(feeId)) return;
+    // Prevent toggling if payment is in progress or fee is already pending/paid
+    if (isProcessing || paidFeeIds.has(feeId) || pendingFeeIds.has(feeId))
+      return;
+
     setSelectedFees((prev) => {
       const newSelected = { ...prev };
       if (newSelected[feeId]) {
@@ -145,6 +159,8 @@ export default function PaymentScreen({ navigation }) {
 
   const startStatusCheck = (paymentId) => {
     setCheckingStatus(true);
+
+    // Increase polling interval to 10 seconds (as requested: "make the loading longer")
     const interval = setInterval(async () => {
       try {
         const res = await api.get(`/payments/status/${paymentId}`);
@@ -158,8 +174,12 @@ export default function PaymentScreen({ navigation }) {
             [
               {
                 text: "OK",
-                onPress: () =>
-                  navigation.navigate("Home", { paymentSuccess: true }),
+                onPress: () => {
+                  // Clear selected fees after successful payment
+                  setSelectedFees({});
+                  setSelectedTotal(0);
+                  navigation.navigate("Home", { paymentSuccess: true });
+                },
               },
             ],
           );
@@ -168,17 +188,22 @@ export default function PaymentScreen({ navigation }) {
           setCheckingStatus(false);
           Alert.alert("Payment Failed ❌", "Please try again.");
         }
+        // Keep polling for other statuses (e.g., 'pending')
       } catch (err) {
         clearInterval(interval);
         setCheckingStatus(false);
       }
-    }, 5000);
+    }, 10000); // Increased from 5000 to 10000 ms
   };
 
   const renderFeeItem = (fee, categoryColor) => {
     const isSelected = !!selectedFees[fee.id];
     const isPaid = paidFeeIds.has(fee.id);
+    const isPending = pendingFeeIds.has(fee.id);
     const activeCategoryColor = categoryColor || colors.brand;
+
+    // Disable interaction if processing or if fee is already paid/pending
+    const isDisabled = isProcessing || isPaid || isPending;
 
     if (isPaid) {
       return (
@@ -206,6 +231,33 @@ export default function PaymentScreen({ navigation }) {
       );
     }
 
+    if (isPending) {
+      return (
+        <View
+          key={fee.id}
+          style={[
+            styles.feeItem,
+            {
+              backgroundColor: colors.surface,
+              borderColor: "#ff9800",
+              borderWidth: 1,
+              opacity: 0.7,
+            },
+          ]}
+        >
+          <View style={styles.feeInfo}>
+            <Text style={[styles.feeName, { color: colors.textPrimary }]}>
+              {fee.name}
+            </Text>
+            <Text style={[styles.feeAmount, { color: "#ff9800" }]}>
+              ₱{parseFloat(fee.amount).toLocaleString()} – Pending
+            </Text>
+          </View>
+          <Ionicons name="time-outline" size={24} color="#ff9800" />
+        </View>
+      );
+    }
+
     return (
       <TouchableOpacity
         key={fee.id}
@@ -215,10 +267,12 @@ export default function PaymentScreen({ navigation }) {
             backgroundColor: colors.surface,
             borderColor: isSelected ? colors.brand : colors.border,
             borderWidth: isSelected ? 1.5 : 1,
+            opacity: isDisabled ? 0.6 : 1,
           },
         ]}
-        onPress={() => toggleFee(fee.id, parseFloat(fee.amount))}
+        onPress={() => !isDisabled && toggleFee(fee.id, parseFloat(fee.amount))}
         activeOpacity={0.7}
+        disabled={isDisabled}
       >
         <View style={styles.feeInfo}>
           <Text style={[styles.feeName, { color: colors.textPrimary }]}>
@@ -364,13 +418,12 @@ export default function PaymentScreen({ navigation }) {
           style={[
             styles.payButton,
             { backgroundColor: colors.brand },
-            (loading || checkingStatus || selectedTotal === 0) &&
-              styles.payButtonDisabled,
+            (isProcessing || selectedTotal === 0) && styles.payButtonDisabled,
           ]}
           onPress={handlePayment}
-          disabled={loading || checkingStatus || selectedTotal === 0}
+          disabled={isProcessing || selectedTotal === 0}
         >
-          {loading || checkingStatus ? (
+          {isProcessing ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <>
@@ -384,6 +437,7 @@ export default function PaymentScreen({ navigation }) {
   );
 }
 
+// Styles remain unchanged
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },

@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   ImageBackground,
   KeyboardAvoidingView,
@@ -34,6 +35,7 @@ export default function LoginScreen({ navigation }) {
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+  const modalAnim = useRef(new Animated.Value(0)).current;
 
   // Validate email format
   useEffect(() => {
@@ -50,6 +52,20 @@ export default function LoginScreen({ navigation }) {
   const isFormValid = () => {
     return email.length > 0 && password.length > 0 && emailError === "";
   };
+
+  // Modal animations
+  useEffect(() => {
+    if (forgotPasswordVisible) {
+      Animated.spring(modalAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 7,
+      }).start();
+    } else {
+      modalAnim.setValue(0);
+    }
+  }, [forgotPasswordVisible]);
 
   const handleLogin = async () => {
     if (!isFormValid()) {
@@ -101,7 +117,7 @@ export default function LoginScreen({ navigation }) {
       });
 
       if (response.data.success) {
-        Alert.alert("Success! ", response.data.message, [
+        Alert.alert("Success!", response.data.message, [
           {
             text: "OK",
             onPress: () => {
@@ -127,6 +143,16 @@ export default function LoginScreen({ navigation }) {
       setResetLoading(false);
     }
   };
+
+  const modalScale = modalAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.8, 1],
+  });
+
+  const modalOpacity = modalAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
 
   return (
     <KeyboardAvoidingView
@@ -247,74 +273,96 @@ export default function LoginScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* FORGOT PASSWORD MODAL */}
+      {/* FORGOT PASSWORD MODAL - IMPROVED */}
       <Modal
         visible={forgotPasswordVisible}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setForgotPasswordVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <Animated.View style={[styles.modalOverlay, { opacity: modalOpacity }]}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
           >
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
+            <Animated.View
+              style={[
+                styles.modalContent,
+                {
+                  transform: [{ scale: modalScale }],
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={["#fff", "#f9f9ff"]}
+                style={styles.modalGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalIconWrapper}>
+                    <Ionicons
+                      name="lock-open-outline"
+                      size={32}
+                      color="#0f3c91"
+                    />
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setForgotPasswordVisible(false)}
+                    style={styles.closeButton}
+                  >
+                    <Ionicons name="close-circle" size={32} color="#999" />
+                  </TouchableOpacity>
+                </View>
+
                 <Text style={styles.modalTitle}>Reset Password</Text>
+
+                <Text style={styles.modalDescription}>
+                  Enter your email address and we'll send you a link to reset
+                  your password.
+                </Text>
+
+                <View style={styles.modalInputContainer}>
+                  <Ionicons name="mail-outline" size={22} color="#0f3c91" />
+                  <TextInput
+                    placeholder="Email address"
+                    placeholderTextColor="#aaa"
+                    style={styles.modalInput}
+                    value={resetEmail}
+                    onChangeText={setResetEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+
                 <TouchableOpacity
-                  onPress={() => setForgotPasswordVisible(false)}
-                  style={styles.closeButton}
+                  style={styles.sendButton}
+                  onPress={handleForgotPassword}
+                  disabled={resetLoading}
                 >
-                  <Ionicons name="close" size={28} color="#666" />
+                  {resetLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="send" size={20} color="#fff" />
+                      <Text style={styles.sendButtonText}>Send Reset Link</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
-              </View>
 
-              <Text style={styles.modalDescription}>
-                Enter your email address and we'll send you instructions to
-                reset your password.
-              </Text>
-
-              <View style={styles.modalInputContainer}>
-                <Ionicons name="mail-outline" size={22} color="#666" />
-                <TextInput
-                  placeholder="Enter your email"
-                  placeholderTextColor="#999"
-                  style={styles.modalInput}
-                  value={resetEmail}
-                  onChangeText={setResetEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.sendButton}
-                onPress={handleForgotPassword}
-                disabled={resetLoading}
-              >
-                {resetLoading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="send" size={20} color="#fff" />
-                    <Text style={styles.sendButtonText}>Send Reset Link</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => {
-                  setForgotPasswordVisible(false);
-                  setResetEmail("");
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setForgotPasswordVisible(false);
+                    setResetEmail("");
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </LinearGradient>
+            </Animated.View>
           </KeyboardAvoidingView>
-        </View>
+        </Animated.View>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -384,6 +432,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
     fontSize: 15,
+    color: "#000", // FIX: ensures text (including dots) is visible
   },
   inputError: {
     borderWidth: 1,
@@ -434,61 +483,74 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  // Modal styles
+  // Modal styles - Improved
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
   modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 55,
-    padding: 25,
     width: "100%",
     maxWidth: 350,
+    borderRadius: 30,
+    overflow: "hidden",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 15 },
+    shadowOpacity: 0.25,
+    shadowRadius: 25,
+    elevation: 15,
+  },
+  modalGradient: {
+    padding: 25,
+    borderRadius: 30,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 15,
+    marginBottom: 10,
   },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#0f3c91",
+  modalIconWrapper: {
+    backgroundColor: "rgba(15, 60, 145, 0.1)",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
   },
   closeButton: {
     padding: 5,
   },
+  modalTitle: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#0f3c91",
+    marginBottom: 12,
+  },
   modalDescription: {
     fontSize: 14,
-    color: "#666",
+    color: "#555",
     lineHeight: 20,
-    marginBottom: 20,
+    marginBottom: 25,
   },
   modalInputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f2f2f2",
-    borderRadius: 15,
-    paddingHorizontal: 15,
-    marginBottom: 20,
+    backgroundColor: "#f8f9fc",
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    marginBottom: 25,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: "#e0e7ff",
   },
   modalInput: {
     flex: 1,
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    fontSize: 15,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    color: "#333",
   },
   sendButton: {
     backgroundColor: "#0f3c91",
@@ -496,21 +558,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
-    borderRadius: 15,
-    marginBottom: 10,
+    borderRadius: 20,
+    marginBottom: 12,
+    shadowColor: "#0f3c91",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   sendButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
-    marginLeft: 8,
+    marginLeft: 10,
   },
   cancelButton: {
-    padding: 14,
+    padding: 12,
     alignItems: "center",
   },
   cancelButtonText: {
-    color: "#666",
+    color: "#999",
     fontSize: 15,
     fontWeight: "600",
   },
