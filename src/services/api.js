@@ -3,10 +3,11 @@ import axios from "axios";
 
 // API root only
 const api = axios.create({
-  baseURL: "https://daniele-cosmic-vapidly.ngrok-free.dev/api", // <-- just API root
+  baseURL: "https://daniele-cosmic-vapidly.ngrok-free.dev/api",
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
+    "ngrok-skip-browser-warning": "true", // 👈 added
   },
 });
 
