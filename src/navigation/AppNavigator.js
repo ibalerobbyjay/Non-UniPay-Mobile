@@ -1,6 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { createStackNavigator } from "@react-navigation/stack";
+import {
+  CardStyleInterpolators,
+  createStackNavigator,
+} from "@react-navigation/stack";
 import { useContext, useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, TouchableOpacity } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
@@ -21,21 +24,19 @@ import RegisterScreen from "../screens/RegisterScreen";
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// ─── Animated UniBot Tab Button ────────────────────────────────────────────
+/* ─────────────────────────────────────────────
+   🔥 Animated UniBot Button (UNCHANGED)
+───────────────────────────────────────────── */
 function UniBotTabButton({ onPress, accessibilityState }) {
   const { colors } = useTheme();
   const focused = accessibilityState?.selected;
 
-  // Floating pulse ring
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.6)).current;
-  // Icon spin on focus
   const spinAnim = useRef(new Animated.Value(0)).current;
-  // Scale pop
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Continuous pulse loop
     const pulse = Animated.loop(
       Animated.parallel([
         Animated.sequence([
@@ -56,7 +57,6 @@ function UniBotTabButton({ onPress, accessibilityState }) {
           Animated.timing(pulseOpacity, {
             toValue: 0,
             duration: 900,
-            easing: Easing.out(Easing.ease),
             useNativeDriver: true,
           }),
           Animated.timing(pulseOpacity, {
@@ -73,7 +73,6 @@ function UniBotTabButton({ onPress, accessibilityState }) {
 
   useEffect(() => {
     if (focused) {
-      // Bounce scale pop when focused
       Animated.sequence([
         Animated.spring(scaleAnim, {
           toValue: 1.15,
@@ -87,7 +86,6 @@ function UniBotTabButton({ onPress, accessibilityState }) {
         }),
       ]).start();
 
-      // Spin icon once
       spinAnim.setValue(0);
       Animated.timing(spinAnim, {
         toValue: 1,
@@ -109,7 +107,6 @@ function UniBotTabButton({ onPress, accessibilityState }) {
       activeOpacity={0.85}
       style={styles.uniBotWrapper}
     >
-      {/* Pulse ring */}
       <Animated.View
         style={[
           styles.pulseRing,
@@ -120,7 +117,7 @@ function UniBotTabButton({ onPress, accessibilityState }) {
           },
         ]}
       />
-      {/* Main button */}
+
       <Animated.View
         style={[
           styles.uniBotButton,
@@ -143,7 +140,9 @@ function UniBotTabButton({ onPress, accessibilityState }) {
   );
 }
 
-// ─── Tab Navigator ──────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────
+   🔥 Tab Navigator (WITH ANIMATION)
+───────────────────────────────────────────── */
 function TabNavigator() {
   const { colors, isDark } = useTheme();
 
@@ -152,6 +151,7 @@ function TabNavigator() {
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
+
           if (route.name === "Home") {
             iconName = focused ? "home" : "home-outline";
           } else if (route.name === "Fees") {
@@ -163,10 +163,20 @@ function TabNavigator() {
           } else if (route.name === "Profile") {
             iconName = focused ? "person" : "person-outline";
           }
-          return <Ionicons name={iconName} size={size} color={color} />;
+
+          // 🔥 ANIMATION (scale)
+          const scale = focused ? 1.15 : 1;
+
+          return (
+            <Animated.View style={{ transform: [{ scale }] }}>
+              <Ionicons name={iconName} size={size} color={color} />
+            </Animated.View>
+          );
         },
+
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.textMuted,
+
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
@@ -178,17 +188,18 @@ function TabNavigator() {
           shadowRadius: 8,
           height: 62,
         },
+
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: "600",
         },
+
         headerShown: false,
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Fees" component={FeesScreen} />
 
-      {/* ── UniBot Center Tab ── */}
       <Tab.Screen
         name="Chatbot"
         component={ChatbotScreen}
@@ -210,7 +221,9 @@ function TabNavigator() {
   );
 }
 
-// ─── Root Navigator ─────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────
+   🔥 Root Navigator (WITH TRANSITION)
+───────────────────────────────────────────── */
 export default function AppNavigator() {
   const { user } = useContext(AuthContext);
   const { colors } = useTheme();
@@ -221,6 +234,23 @@ export default function AppNavigator() {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: colors.textPrimary,
         cardStyle: { backgroundColor: colors.background },
+
+        // 🔥 TRANSITION
+        gestureEnabled: true,
+        gestureDirection: "horizontal",
+
+        transitionSpec: {
+          open: {
+            animation: "timing",
+            config: { duration: 300 },
+          },
+          close: {
+            animation: "timing",
+            config: { duration: 250 },
+          },
+        },
+
+        cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
       }}
     >
       {user ? (
@@ -230,16 +260,19 @@ export default function AppNavigator() {
             component={TabNavigator}
             options={{ headerShown: false }}
           />
+
           <Stack.Screen
             name="Payment"
             component={PaymentScreen}
             options={{ headerShown: false }}
           />
+
           <Stack.Screen
             name="PaymentHistory"
             component={PaymentHistoryScreen}
             options={{ headerShown: false }}
           />
+
           <Stack.Screen
             name="Notifications"
             component={NotificationsScreen}
@@ -253,6 +286,7 @@ export default function AppNavigator() {
             component={LoginScreen}
             options={{ headerShown: false }}
           />
+
           <Stack.Screen
             name="Register"
             component={RegisterScreen}
@@ -264,7 +298,7 @@ export default function AppNavigator() {
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+/* ───────────────────────────────────────────── */
 const styles = StyleSheet.create({
   uniBotWrapper: {
     flex: 1,

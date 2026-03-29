@@ -342,7 +342,7 @@ export default function OnboardingGuide({
     return () => loop.stop();
   }, [step, visible]);
 
-  // Resolve rect
+  // ─── IMPROVED RECT RESOLVER WITH SCROLL ─────────────────────────────────
   useEffect(() => {
     if (!visible) return;
     const currentStep = STEPS[step];
@@ -361,18 +361,33 @@ export default function OnboardingGuide({
       return;
     }
 
+    let attempts = 0;
+    const maxAttempts = 10;
+    const interval = 150;
+
     const load = async () => {
       const rect = await getElementRect(
         currentStep.layoutKey,
         BORDER_RADIUS[currentStep.layoutKey],
       );
       if (!rect) {
-        setTimeout(() => load(), 100);
+        attempts++;
+        if (attempts < maxAttempts) setTimeout(load, interval);
         return;
       }
-      const inView = rect.y >= 0 && rect.y + rect.height <= SH;
-      if (!inView && scrollToElement) {
-        scrollToElement(rect.y - SH / 2 + rect.height / 2);
+
+      // Check if element is visible in the current viewport
+      const headerHeight = 100; // approximate top bar height (adjust if needed)
+      const visibleTop = headerHeight;
+      const visibleBottom = SH - 80; // leave room for bottom tabs
+      const isVisible =
+        rect.y >= visibleTop && rect.y + rect.height <= visibleBottom;
+
+      if (!isVisible && scrollToElement) {
+        // Scroll so that the element appears 100px from the top
+        const scrollOffset = rect.y - 100;
+        scrollToElement(scrollOffset);
+        // Wait for scroll to finish, then re‑fetch rect
         setTimeout(async () => {
           const r2 = await getElementRect(
             currentStep.layoutKey,
@@ -673,12 +688,8 @@ const styles = StyleSheet.create({
   },
   unibotIndicator: {
     position: "absolute",
-
-    // 🎯 exact center ng tab index 2
     left: TAB_W * 2 + TAB_W / 2 - UNIBOT_ICON_SIZE / 2,
-
     bottom: TAB_BAR_HEIGHT + 15,
-
     alignItems: "center",
     gap: vs(2),
   },

@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -15,10 +17,13 @@ import {
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
 
-function MessageBubble({ message, colors }) {
+// ─── MESSAGE BUBBLE ───────────────────────────────────────────────
+function MessageBubble({ message, colors, onLongPress }) {
   const isUser = message.role === "user";
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onLongPress={() => onLongPress(message)}
       style={[
         styles.bubbleRow,
         isUser ? styles.bubbleRowUser : styles.bubbleRowBot,
@@ -31,37 +36,57 @@ function MessageBubble({ message, colors }) {
       )}
       <View
         style={[
-          styles.bubble,
-          isUser
-            ? { backgroundColor: colors.brand, borderBottomRightRadius: 4 }
-            : {
-                backgroundColor: colors.surface,
-                borderBottomLeftRadius: 4,
-                borderWidth: 1,
-                borderColor: colors.borderLight,
-              },
+          styles.messageWrapper,
+          isUser ? styles.messageWrapperUser : styles.messageWrapperBot,
         ]}
       >
-        <Text
+        <View
           style={[
-            styles.bubbleText,
-            { color: isUser ? "#fff" : colors.textPrimary },
+            styles.bubble,
+            isUser
+              ? { backgroundColor: colors.brand, borderBottomRightRadius: 4 }
+              : {
+                  backgroundColor: colors.surface,
+                  borderBottomLeftRadius: 4,
+                  borderWidth: 1,
+                  borderColor: colors.borderLight,
+                },
           ]}
         >
-          {message.content}
-        </Text>
+          <Text
+            style={[
+              styles.bubbleText,
+              { color: isUser ? "#fff" : colors.textPrimary },
+            ]}
+          >
+            {message.content}
+          </Text>
+        </View>
+        {message.reaction && (
+          <Text
+            style={[
+              styles.reaction,
+              isUser ? styles.reactionUser : styles.reactionBot,
+            ]}
+          >
+            {message.reaction}
+          </Text>
+        )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
+// ─── SUGGESTIONS ────────────────────────────────────────────────
 const SUGGESTIONS = [
   "How do I pay my fees?",
   "What does PENDING clearance mean?",
   "How do I refresh my data?",
   "Where is my student number?",
+  "Who are the developers of this app?",
 ];
 
+// ─── CHATBOT SCREEN ─────────────────────────────────────────────
 export default function ChatbotScreen({ navigation }) {
   const { colors } = useTheme();
 
@@ -75,15 +100,39 @@ export default function ChatbotScreen({ navigation }) {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [actionVisible, setActionVisible] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+
   const flatListRef = useRef(null);
 
   useEffect(() => {
     if (navigation) navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
+  // ─── AUTO-SCROLL ONLY WHEN A NEW MESSAGE IS ADDED ──────────────
+  useEffect(() => {
+    // Scroll to bottom whenever the total number of messages changes
+    // (new user message or bot reply). Reactions do NOT change the length.
+    if (flatListRef.current) {
+      flatListRef.current.scrollToEnd({ animated: true });
+    }
+  }, [messages.length]);
+
+  // ─── SEND MESSAGE ─────────────────────────────────────────────
   const sendMessage = async (text) => {
     const userText = (text || input).trim();
     if (!userText || loading) return;
+
+    // If editing existing message
+    if (editingId) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === editingId ? { ...m, content: userText } : m)),
+      );
+      setEditingId(null);
+      setInput("");
+      return;
+    }
 
     const userMsg = {
       id: Date.now().toString(),
@@ -126,12 +175,40 @@ export default function ChatbotScreen({ navigation }) {
     }
   };
 
+  // ─── LONG PRESS ACTIONS ───────────────────────────────────────
+  const handleLongPress = (msg) => {
+    setSelectedMessage(msg);
+    setActionVisible(true);
+  };
+
+  const copyMessage = async () => {
+    await Clipboard.setStringAsync(selectedMessage.content);
+    setActionVisible(false);
+  };
+
+  const editMessage = () => {
+    if (selectedMessage.role !== "user") return;
+    setInput(selectedMessage.content);
+    setEditingId(selectedMessage.id);
+    setActionVisible(false);
+  };
+
+  const reactMessage = (emoji) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === selectedMessage.id ? { ...m, reaction: emoji } : m,
+      ),
+    );
+    setActionVisible(false);
+  };
+
+  // ─── RENDER ─────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      {/* Header */}
+      {/* HEADER */}
       <LinearGradient
         colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
@@ -157,19 +234,20 @@ export default function ChatbotScreen({ navigation }) {
         </View>
       </LinearGradient>
 
-      {/* Messages */}
+      {/* MESSAGES */}
       <FlatList
         ref={flatListRef}
         data={messages}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <MessageBubble message={item} colors={colors} />
+          <MessageBubble
+            message={item}
+            colors={colors}
+            onLongPress={handleLongPress}
+          />
         )}
         contentContainerStyle={styles.messageList}
-        onContentSizeChange={() =>
-          flatListRef.current?.scrollToEnd({ animated: true })
-        }
-        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        // REMOVED onContentSizeChange and onLayout – they were causing unwanted scrolls
         ListFooterComponent={
           loading ? (
             <View style={styles.typingIndicator}>
@@ -197,7 +275,7 @@ export default function ChatbotScreen({ navigation }) {
         }
       />
 
-      {/* Suggestion Chips */}
+      {/* SUGGESTION CHIPS */}
       {messages.length === 1 && (
         <View style={styles.suggestionsContainer}>
           <FlatList
@@ -227,7 +305,7 @@ export default function ChatbotScreen({ navigation }) {
         </View>
       )}
 
-      {/* Input Bar */}
+      {/* INPUT BAR */}
       <View
         style={[
           styles.inputBar,
@@ -277,10 +355,42 @@ export default function ChatbotScreen({ navigation }) {
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      {/* LONG PRESS ACTION MODAL */}
+      <Modal transparent visible={actionVisible} animationType="fade">
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          onPress={() => setActionVisible(false)}
+        >
+          <View style={[styles.modalBox, { backgroundColor: colors.surface }]}>
+            <TouchableOpacity style={styles.modalItem} onPress={copyMessage}>
+              <Text style={styles.modalText}>Copy</Text>
+            </TouchableOpacity>
+
+            {selectedMessage?.role === "user" && (
+              <TouchableOpacity style={styles.modalItem} onPress={editMessage}>
+                <Text style={styles.modalText}>Edit</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.reactionRow}>
+              {["👍", "❤️", "😂", "😮", "😢"].map((emoji) => (
+                <TouchableOpacity
+                  key={emoji}
+                  onPress={() => reactMessage(emoji)}
+                >
+                  <Text style={styles.emoji}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
+// ─── STYLES ─────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
@@ -311,7 +421,11 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#fff" },
   headerSub: { fontSize: 13, color: "rgba(255,255,255,0.8)" },
   messageList: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
-  bubbleRow: { flexDirection: "row", marginBottom: 12, alignItems: "flex-end" },
+  bubbleRow: {
+    flexDirection: "row",
+    marginBottom: 12,
+    alignItems: "flex-start",
+  },
   bubbleRowUser: { justifyContent: "flex-end" },
   bubbleRowBot: { justifyContent: "flex-start" },
   botAvatar: {
@@ -325,8 +439,17 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   botAvatarText: { fontSize: 14, fontWeight: "800", color: "#0f3c91" },
-  bubble: {
+  messageWrapper: {
     maxWidth: "75%",
+    flexDirection: "column",
+  },
+  messageWrapperBot: {
+    alignItems: "flex-start",
+  },
+  messageWrapperUser: {
+    alignItems: "flex-end",
+  },
+  bubble: {
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -335,8 +458,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
+    width: "100%",
   },
   bubbleText: { fontSize: 15, lineHeight: 22 },
+  reaction: {
+    fontSize: 16,
+    marginTop: 4,
+  },
+  reactionBot: {
+    textAlign: "left",
+  },
+  reactionUser: {
+    textAlign: "right",
+  },
   typingIndicator: {
     flexDirection: "row",
     alignItems: "center",
@@ -395,4 +529,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBox: { width: 220, borderRadius: 16, padding: 12 },
+  modalItem: { paddingVertical: 10 },
+  modalText: { fontSize: 14, fontWeight: "600" },
+  reactionRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginTop: 10,
+  },
+  emoji: { fontSize: 22 },
 });
