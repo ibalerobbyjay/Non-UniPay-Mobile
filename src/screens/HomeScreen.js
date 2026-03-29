@@ -234,7 +234,6 @@ export default function HomeScreen({ navigation }) {
     header: useRef(null),
     clearance: useRef(null),
     cards: useRef(null),
-    unibot: useRef(null),
     fees: useRef(null),
     pay: useRef(null),
     history: useRef(null),
@@ -417,18 +416,8 @@ export default function HomeScreen({ navigation }) {
 
   const epAccent = examPeriodAccent(examPeriod?.exam_period);
 
-  // Quick-action rows — each wrapped in a View with its own ref
+  // Quick-action rows — UniBot is in the nav tab, removed from here
   const quickActions = [
-    {
-      refKey: "unibot",
-      bg: "rgb(244,180,20)",
-      icon: "chatbubble-ellipses-outline",
-      iconColor: "#0f3c91",
-      title: "UniBot",
-      subtitle: "Ask about the app",
-      screen: "Chatbot",
-      subtitleColor: colors.textSecondary,
-    },
     {
       refKey: "fees",
       bg: colors.brand,
@@ -871,7 +860,7 @@ export default function HomeScreen({ navigation }) {
   );
 }
 
-// ─── Styles (unchanged) ───────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerGradient: {
