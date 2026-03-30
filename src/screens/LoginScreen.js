@@ -21,6 +21,16 @@ import {
 import { AuthContext } from "../contexts/AuthContext";
 import api from "../services/api";
 
+const MAX_ATTEMPTS = 3;
+const BASE_LOCKOUT_SECONDS = 30;
+
+function formatDuration(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s === 0 ? `${m}m` : `${m}m ${s}s`;
+}
+
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,16 +38,23 @@ export default function LoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const { login, logout } = useContext(AuthContext);
 
-  // Validation state
+  // Validation
   const [emailError, setEmailError] = useState("");
 
-  // Forgot Password States
+  // ─── Lockout state ────────────────────────────────────────────────────────
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutEnd, setLockoutEnd] = useState(null);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  const [lockoutCount, setLockoutCount] = useState(0);
+  const [lockoutDuration, setLockoutDuration] = useState(0);
+
+  // Forgot Password
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const modalAnim = useRef(new Animated.Value(0)).current;
 
-  // Validate email format
+  // Email validation
   useEffect(() => {
     if (email.length === 0) {
       setEmailError("");
@@ -48,12 +65,24 @@ export default function LoginScreen({ navigation }) {
     }
   }, [email]);
 
-  // Form validity
-  const isFormValid = () => {
-    return email.length > 0 && password.length > 0 && emailError === "";
-  };
+  // ─── Lockout countdown ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!lockoutEnd) return;
+    const interval = setInterval(() => {
+      const remaining = Math.ceil((lockoutEnd - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setLockoutEnd(null);
+        setLockoutSeconds(0);
+        setFailedAttempts(0);
+        clearInterval(interval);
+      } else {
+        setLockoutSeconds(remaining);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutEnd]);
 
-  // Modal animations
+  // Modal animation
   useEffect(() => {
     if (forgotPasswordVisible) {
       Animated.spring(modalAnim, {
@@ -67,7 +96,14 @@ export default function LoginScreen({ navigation }) {
     }
   }, [forgotPasswordVisible]);
 
+  const isFormValid = () =>
+    email.length > 0 && password.length > 0 && emailError === "";
+
+  const isLocked = !!lockoutEnd;
+
+  // ─── Login with escalating lockout ───────────────────────────────────────
   const handleLogin = async () => {
+    if (isLocked) return;
     if (!isFormValid()) {
       Alert.alert("Error", "Please enter a valid email and password");
       return;
@@ -78,8 +114,39 @@ export default function LoginScreen({ navigation }) {
       const result = await login(email, password);
 
       if (!result.success) {
-        Alert.alert("Login Failed", result.message);
+        const newAttempts = failedAttempts + 1;
+
+        if (newAttempts >= MAX_ATTEMPTS) {
+          const newLockoutCount = lockoutCount + 1;
+          // Doubles every lockout: 30s → 60s → 120s → 240s ...
+          const duration =
+            BASE_LOCKOUT_SECONDS * Math.pow(2, newLockoutCount - 1);
+
+          setLockoutCount(newLockoutCount);
+          setLockoutDuration(duration);
+          setFailedAttempts(0);
+          setLockoutEnd(Date.now() + duration * 1000);
+          setLockoutSeconds(duration);
+
+          Alert.alert(
+            "Account Temporarily Locked",
+            `Too many failed attempts. Please wait ${formatDuration(duration)} before trying again.`,
+          );
+        } else {
+          setFailedAttempts(newAttempts);
+          Alert.alert(
+            "Login Failed",
+            `${result.message}\n\nAttempt ${newAttempts} of ${MAX_ATTEMPTS}.`,
+          );
+        }
       } else {
+        // Reset everything on success
+        setFailedAttempts(0);
+        setLockoutEnd(null);
+        setLockoutSeconds(0);
+        setLockoutCount(0);
+        setLockoutDuration(0);
+
         if (result.user && result.user.role === "admin") {
           await logout();
           Alert.alert(
@@ -97,13 +164,12 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  // Handle Forgot Password
+  // ─── Forgot Password ──────────────────────────────────────────────────────
   const handleForgotPassword = async () => {
     if (!resetEmail) {
       Alert.alert("Error", "Please enter your email address");
       return;
     }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(resetEmail)) {
       Alert.alert("Error", "Please enter a valid email address");
@@ -115,7 +181,6 @@ export default function LoginScreen({ navigation }) {
       const response = await api.post("/password/reset-request", {
         email: resetEmail,
       });
-
       if (response.data.success) {
         Alert.alert("Success!", response.data.message, [
           {
@@ -148,7 +213,6 @@ export default function LoginScreen({ navigation }) {
     inputRange: [0, 1],
     outputRange: [0.8, 1],
   });
-
   const modalOpacity = modalAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
@@ -177,7 +241,7 @@ export default function LoginScreen({ navigation }) {
             />
           </ImageBackground>
 
-          {/* GLASSY OVERLAPPING SECTION */}
+          {/* GLASSY SECTION */}
           <BlurView intensity={50} tint="dark" style={styles.bottomSection}>
             <Text style={styles.title}>Non-UniPay</Text>
             <Text style={styles.description}>
@@ -185,12 +249,13 @@ export default function LoginScreen({ navigation }) {
             </Text>
 
             <View style={styles.card}>
-              {/* Email with validation */}
+              {/* Email */}
               <View>
                 <View
                   style={[
                     styles.inputContainer,
                     emailError ? styles.inputError : null,
+                    isLocked && { opacity: 0.5 },
                   ]}
                 >
                   <Ionicons name="person-outline" size={20} color="#666" />
@@ -202,6 +267,8 @@ export default function LoginScreen({ navigation }) {
                     onChangeText={setEmail}
                     autoCapitalize="none"
                     keyboardType="email-address"
+                    editable={!isLocked}
+                    maxLength={25}
                   />
                 </View>
                 {emailError ? (
@@ -210,7 +277,9 @@ export default function LoginScreen({ navigation }) {
               </View>
 
               {/* Password */}
-              <View style={styles.inputContainer}>
+              <View
+                style={[styles.inputContainer, isLocked && { opacity: 0.5 }]}
+              >
                 <Ionicons name="lock-closed-outline" size={20} color="#666" />
                 <TextInput
                   placeholder="Password"
@@ -219,10 +288,12 @@ export default function LoginScreen({ navigation }) {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
+                  editable={!isLocked}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  disabled={isLocked}
                 >
                   <Ionicons
                     name={showPassword ? "eye-off-outline" : "eye-outline"}
@@ -232,27 +303,88 @@ export default function LoginScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
 
-              {/* Forgot Password Link */}
+              {/* Forgot Password */}
               <TouchableOpacity
                 style={styles.forgotPasswordContainer}
                 onPress={() => setForgotPasswordVisible(true)}
+                disabled={isLocked}
               >
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                <Text
+                  style={[
+                    styles.forgotPasswordText,
+                    isLocked && { color: "#aaa" },
+                  ]}
+                >
+                  Forgot Password?
+                </Text>
               </TouchableOpacity>
             </View>
 
+            {/* ─── Attempt dots ──────────────────────────────────────────── */}
+            {failedAttempts > 0 && !isLocked && (
+              <View style={styles.attemptRow}>
+                {[1, 2, 3].map((i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.attemptDot,
+                      i <= failedAttempts && styles.attemptDotFilled,
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+
+            {/* ─── Lockout warning ───────────────────────────────────────── */}
+            {isLocked && (
+              <View style={styles.lockoutBox}>
+                <View style={styles.lockoutLeft}>
+                  <Ionicons name="lock-closed" size={20} color="#e24b4a" />
+                  <View style={{ marginLeft: 10 }}>
+                    <Text style={styles.lockoutTitle}>
+                      Account temporarily locked
+                    </Text>
+                    <Text style={styles.lockoutSub}>
+                      {lockoutCount > 1
+                        ? `Lockout #${lockoutCount} — wait time is increasing`
+                        : "Too many failed attempts"}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.lockoutTimer}>
+                  {formatDuration(lockoutSeconds)}
+                </Text>
+              </View>
+            )}
+
+            {/* ─── Escalation hint ───────────────────────────────────────── */}
+            {isLocked && lockoutCount > 1 && (
+              <Text style={styles.lockoutHint}>
+                Each lockout doubles the wait:{" "}
+                {formatDuration(
+                  BASE_LOCKOUT_SECONDS * Math.pow(2, lockoutCount - 2),
+                )}{" "}
+                → {formatDuration(lockoutDuration)}
+              </Text>
+            )}
+
+            {/* ─── Login button ──────────────────────────────────────────── */}
             <TouchableOpacity
               style={[
                 styles.loginButton,
-                !isFormValid() && styles.loginButtonDisabled,
+                (!isFormValid() || isLocked) && styles.loginButtonDisabled,
               ]}
               onPress={handleLogin}
-              disabled={loading || !isFormValid()}
+              disabled={loading || !isFormValid() || isLocked}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.loginText}>Login</Text>
+                <Text style={styles.loginText}>
+                  {isLocked
+                    ? `Locked — wait ${formatDuration(lockoutSeconds)}`
+                    : "Login"}
+                </Text>
               )}
             </TouchableOpacity>
 
@@ -273,7 +405,7 @@ export default function LoginScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* FORGOT PASSWORD MODAL - IMPROVED */}
+      {/* FORGOT PASSWORD MODAL */}
       <Modal
         visible={forgotPasswordVisible}
         transparent
@@ -287,9 +419,7 @@ export default function LoginScreen({ navigation }) {
             <Animated.View
               style={[
                 styles.modalContent,
-                {
-                  transform: [{ scale: modalScale }],
-                },
+                { transform: [{ scale: modalScale }] },
               ]}
             >
               <LinearGradient
@@ -315,7 +445,6 @@ export default function LoginScreen({ navigation }) {
                 </View>
 
                 <Text style={styles.modalTitle}>Reset Password</Text>
-
                 <Text style={styles.modalDescription}>
                   Enter your email address and we'll send you a link to reset
                   your password.
@@ -332,6 +461,7 @@ export default function LoginScreen({ navigation }) {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    maxLength={25}
                   />
                 </View>
 
@@ -369,13 +499,8 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  topSection: {
-    flex: 0.45,
-    overflow: "hidden",
-  },
+  container: { flex: 1 },
+  topSection: { flex: 0.45, overflow: "hidden" },
   bottomSection: {
     position: "absolute",
     bottom: 0,
@@ -432,7 +557,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
     fontSize: 15,
-    color: "#000", // FIX: ensures text (including dots) is visible
+    color: "#000",
   },
   inputError: {
     borderWidth: 1,
@@ -454,6 +579,74 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
+
+  // ─── Attempt dots ─────────────────────────────────────────────────────────
+  attemptRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 14,
+    marginBottom: 2,
+  },
+  attemptDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#ddd",
+  },
+  attemptDotFilled: {
+    backgroundColor: "#e24b4a",
+  },
+  attemptText: {
+    fontSize: 12,
+    color: "#e24b4a",
+    marginLeft: 4,
+  },
+
+  // ─── Lockout box ──────────────────────────────────────────────────────────
+  lockoutBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fef2f2",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    padding: 14,
+    marginTop: 14,
+  },
+  lockoutLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  lockoutTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#e24b4a",
+  },
+  lockoutSub: {
+    fontSize: 11,
+    color: "#f87171",
+    marginTop: 2,
+  },
+  lockoutTimer: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#e24b4a",
+    minWidth: 50,
+    textAlign: "right",
+  },
+  lockoutHint: {
+    fontSize: 11,
+    color: "#f87171",
+    textAlign: "center",
+    marginTop: 6,
+    fontStyle: "italic",
+  },
+
+  // ─── Buttons ──────────────────────────────────────────────────────────────
   loginButton: {
     backgroundColor: "#0f3c91",
     padding: 15,
@@ -483,7 +676,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  // Modal styles - Improved
+
+  // ─── Modal ────────────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.65)",
@@ -502,10 +696,7 @@ const styles = StyleSheet.create({
     shadowRadius: 25,
     elevation: 15,
   },
-  modalGradient: {
-    padding: 25,
-    borderRadius: 30,
-  },
+  modalGradient: { padding: 25, borderRadius: 30 },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -520,9 +711,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  closeButton: {
-    padding: 5,
-  },
+  closeButton: { padding: 5 },
   modalTitle: {
     fontSize: 28,
     fontWeight: "bold",
@@ -572,13 +761,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginLeft: 10,
   },
-  cancelButton: {
-    padding: 12,
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    color: "#999",
-    fontSize: 15,
-    fontWeight: "600",
-  },
+  cancelButton: { padding: 12, alignItems: "center" },
+  cancelButtonText: { color: "#999", fontSize: 15, fontWeight: "600" },
 });

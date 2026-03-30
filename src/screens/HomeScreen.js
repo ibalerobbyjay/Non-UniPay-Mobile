@@ -335,7 +335,7 @@ export default function HomeScreen({ navigation }) {
   useFocusEffect(
     useCallback(() => {
       if (route.params?.paymentSuccess) {
-        Alert.alert("Success", "Paid Successfully ✅");
+        Alert.alert("Success", "Paid Successfully!");
         loadData();
         navigation.setParams({ paymentSuccess: false });
       }

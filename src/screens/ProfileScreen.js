@@ -552,7 +552,12 @@ export default function ProfileScreen({ navigation }) {
             >
               {profile?.profile_picture ? (
                 <Image
-                  source={{ uri: profile.profile_picture }}
+                  source={{
+                    uri: profile.profile_picture,
+                    headers: {
+                      "ngrok-skip-browser-warning": "true",
+                    },
+                  }}
                   style={styles.avatar}
                 />
               ) : (
