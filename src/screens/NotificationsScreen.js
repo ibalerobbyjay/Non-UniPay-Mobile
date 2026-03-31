@@ -5,7 +5,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   FlatList,
   Image,
@@ -19,7 +18,7 @@ import {
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
 
-// ─── Loading Overlay (shared) ────────────────────────────────────────────────
+// ─── Loading Overlay ─────────────────────────────────────────────────────
 function LoadingOverlay({ visible }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -86,6 +85,73 @@ function LoadingOverlay({ visible }) {
   );
 }
 
+// ─── Confirmation Modal ─────────────────────────────────────────────────
+function ConfirmationModal({
+  visible,
+  title,
+  message,
+  confirmText,
+  cancelText,
+  onConfirm,
+  onCancel,
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={48}
+            color={colors.brand}
+          />
+          <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+            {title}
+          </Text>
+          <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
+            {message}
+          </Text>
+          <View style={styles.modalButtonRow}>
+            <TouchableOpacity
+              style={[
+                styles.modalButton,
+                styles.modalCancelButton,
+                { borderColor: colors.border },
+              ]}
+              onPress={onCancel}
+            >
+              <Text
+                style={[
+                  styles.modalButtonText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {cancelText}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.modalButton,
+                styles.modalConfirmButton,
+                { backgroundColor: colors.brand },
+              ]}
+              onPress={onConfirm}
+            >
+              <Text style={styles.modalConfirmButtonText}>{confirmText}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function NotificationsScreen() {
   const navigation = useNavigation();
   const { colors } = useTheme();
@@ -101,6 +167,13 @@ export default function NotificationsScreen() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
   const toolbarAnim = useRef(new Animated.Value(0)).current;
+
+  // Modal states
+  const [deleteModal, setDeleteModal] = useState({
+    visible: false,
+    ids: new Set(),
+  });
+  const [clearAllModal, setClearAllModal] = useState(false);
 
   useEffect(() => {
     Animated.spring(toolbarAnim, {
@@ -174,59 +247,41 @@ export default function NotificationsScreen() {
 
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
-    Alert.alert(
-      "Delete Notifications",
-      `Delete ${selectedIds.size} selected notification${selectedIds.size !== 1 ? "s" : ""}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              await Promise.all(
-                [...selectedIds].map((id) =>
-                  api.delete(`/notifications/${id}`),
-                ),
-              );
-              setNotifications((prev) =>
-                prev.filter((n) => !selectedIds.has(n.id)),
-              );
-              exitSelectionMode();
-            } catch (error) {
-              Alert.alert("Error", "Failed to delete some notifications.");
-            } finally {
-              setDeleting(false);
-            }
-          },
-        },
-      ],
-    );
+    setDeleteModal({ visible: true, ids: selectedIds });
+  };
+
+  const confirmDelete = async () => {
+    const idsToDelete = deleteModal.ids;
+    setDeleteModal({ visible: false, ids: new Set() });
+    setDeleting(true);
+    try {
+      await Promise.all(
+        [...idsToDelete].map((id) => api.delete(`/notifications/${id}`)),
+      );
+      setNotifications((prev) => prev.filter((n) => !idsToDelete.has(n.id)));
+      exitSelectionMode();
+    } catch (error) {
+      console.error("Error deleting notifications:", error);
+      // Optionally show error modal
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleClearAll = () => {
     if (notifications.length === 0) return;
-    Alert.alert(
-      "Clear All Notifications",
-      "Are you sure you want to delete all notifications?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear All",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await api.delete("/notifications/clear-all");
-              setNotifications([]);
-              exitSelectionMode();
-            } catch (error) {
-              Alert.alert("Error", "Failed to clear notifications.");
-            }
-          },
-        },
-      ],
-    );
+    setClearAllModal(true);
+  };
+
+  const confirmClearAll = async () => {
+    setClearAllModal(false);
+    try {
+      await api.delete("/notifications/clear-all");
+      setNotifications([]);
+      exitSelectionMode();
+    } catch (error) {
+      console.error("Error clearing notifications:", error);
+    }
   };
 
   const handleNotificationPress = (item) => {
@@ -506,6 +561,28 @@ export default function NotificationsScreen() {
           </View>
         </Animated.View>
       )}
+
+      {/* Confirmation Modal for Delete Selected */}
+      <ConfirmationModal
+        visible={deleteModal.visible}
+        title="Delete Notifications"
+        message={`Delete ${deleteModal.ids.size} selected notification${deleteModal.ids.size !== 1 ? "s" : ""}?`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteModal({ visible: false, ids: new Set() })}
+      />
+
+      {/* Confirmation Modal for Clear All */}
+      <ConfirmationModal
+        visible={clearAllModal}
+        title="Clear All Notifications"
+        message="Are you sure you want to delete all notifications?"
+        confirmText="Clear All"
+        cancelText="Cancel"
+        onConfirm={confirmClearAll}
+        onCancel={() => setClearAllModal(false)}
+      />
     </View>
   );
 }
@@ -689,5 +766,68 @@ const styles = StyleSheet.create({
     marginTop: 5,
     fontSize: 13,
     color: "rgba(255,255,255,0.4)",
+  },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  modalCard: {
+    width: "100%",
+    borderRadius: 28,
+    padding: 28,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalMessage: {
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  modalButtonRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  modalCancelButton: {
+    borderWidth: 1,
+    backgroundColor: "transparent",
+  },
+  modalConfirmButton: {
+    backgroundColor: "#0f3c91",
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  modalConfirmButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

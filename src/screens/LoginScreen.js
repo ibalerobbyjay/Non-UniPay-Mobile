@@ -470,18 +470,7 @@ export default function LoginScreen({ navigation }) {
             colors={["rgba(5,15,50,0.88)", "rgba(10,25,80,0.95)"]}
             style={StyleSheet.absoluteFill}
           />
-          <Animated.View
-            style={[
-              styles.loadingLogoRing,
-              { transform: [{ scale: pulseAnim }] },
-            ]}
-          >
-            <Image
-              source={require("../../assets/logo.png")}
-              style={styles.loadingLogo}
-              resizeMode="contain"
-            />
-          </Animated.View>
+
           <ActivityIndicator
             size="large"
             color="#f4b400"

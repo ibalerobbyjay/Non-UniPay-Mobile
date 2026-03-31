@@ -8,7 +8,6 @@ import * as Sharing from "expo-sharing";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   FlatList,
   Image,
@@ -90,10 +89,57 @@ function LoadingOverlay({ visible }) {
   );
 }
 
+// ─── Generic Alert Modal ─────────────────────────────────────────────────────
+function AlertModal({ visible, title, message, onClose }) {
+  const { colors } = useTheme();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
+          <Ionicons
+            name="information-circle-outline"
+            size={48}
+            color={colors.brand}
+          />
+          <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+            {title}
+          </Text>
+          <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
+            {message}
+          </Text>
+          <View style={styles.modalButtonRow}>
+            <TouchableOpacity
+              style={[
+                styles.modalButton,
+                styles.modalConfirmButton,
+                { backgroundColor: colors.brand },
+              ]}
+              onPress={onClose}
+            >
+              <Text style={styles.modalConfirmButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Receipt Modal (unchanged) ──────────────────────────────────────────────
 const ReceiptModal = ({ visible, onClose, receiptData }) => {
   const { colors } = useTheme();
   const [downloading, setDownloading] = useState(false);
+  const [alertModal, setAlertModal] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
   if (!receiptData) return null;
 
   const getStatusColor = (status) => {
@@ -178,174 +224,206 @@ const ReceiptModal = ({ visible, onClose, receiptData }) => {
           UTI: "com.adobe.pdf",
         });
       } else {
-        Alert.alert("Saved", `Receipt saved to:\n${newUri}`);
+        setAlertModal({
+          visible: true,
+          title: "Saved",
+          message: `Receipt saved to:\n${newUri}`,
+        });
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to generate receipt PDF.");
+      console.error(error);
+      setAlertModal({
+        visible: true,
+        title: "Error",
+        message: "Failed to generate receipt PDF.",
+      });
     } finally {
       setDownloading(false);
     }
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
-      <View style={[modalStyles.overlay, { backgroundColor: colors.overlay }]}>
+    <>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent
+        onRequestClose={onClose}
+      >
         <View
-          style={[modalStyles.content, { backgroundColor: colors.surface }]}
+          style={[modalStyles.overlay, { backgroundColor: colors.overlay }]}
         >
-          <LinearGradient
-            colors={[colors.gradientStart, colors.gradientEnd]}
-            style={modalStyles.header}
+          <View
+            style={[modalStyles.content, { backgroundColor: colors.surface }]}
           >
-            <Text style={modalStyles.headerTitle}>Payment Receipt</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={28} color="#fff" />
-            </TouchableOpacity>
-          </LinearGradient>
-
-          <ScrollView contentContainerStyle={modalStyles.scrollContent}>
-            <View
-              style={[
-                modalStyles.receiptCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
+            <LinearGradient
+              colors={[colors.gradientStart, colors.gradientEnd]}
+              style={modalStyles.header}
             >
-              <Image
-                source={require("../../assets/logo.png")}
-                style={modalStyles.logo}
-              />
-              <Text style={[modalStyles.receiptTitle, { color: colors.brand }]}>
-                Non-UniPay
-              </Text>
-              <Text
+              <Text style={modalStyles.headerTitle}>Payment Receipt</Text>
+              <TouchableOpacity onPress={onClose}>
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+            </LinearGradient>
+
+            <ScrollView contentContainerStyle={modalStyles.scrollContent}>
+              <View
                 style={[
-                  modalStyles.receiptSub,
-                  { color: colors.textSecondary },
+                  modalStyles.receiptCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
                 ]}
               >
-                Official Payment Receipt
-              </Text>
-              <View
-                style={[
-                  modalStyles.divider,
-                  { backgroundColor: colors.border },
-                ]}
-              />
-              {[
-                ["Reference No", receiptData.reference_no],
-                ["Date", receiptData.date],
-                ["Payment Method", receiptData.method],
-                ["Semester", receiptData.semester],
-              ].map(([label, value]) => (
-                <View key={label} style={modalStyles.row}>
-                  <Text
-                    style={[modalStyles.label, { color: colors.textSecondary }]}
-                  >
-                    {label}
-                  </Text>
-                  <Text
-                    style={[modalStyles.value, { color: colors.textPrimary }]}
-                  >
-                    {value}
-                  </Text>
-                </View>
-              ))}
-              <View
-                style={[
-                  modalStyles.divider,
-                  { backgroundColor: colors.border },
-                ]}
-              />
-              {receiptData.fees && receiptData.fees.length > 0 && (
-                <>
-                  <Text
-                    style={[
-                      modalStyles.breakdownTitle,
-                      { color: colors.brand },
-                    ]}
-                  >
-                    Fee Breakdown
-                  </Text>
-                  {receiptData.fees.map((fee, index) => (
-                    <View key={index} style={modalStyles.row}>
-                      <Text
-                        style={[
-                          modalStyles.label,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        {fee.name || fee.fee_name}
-                      </Text>
-                      <Text
-                        style={[
-                          modalStyles.value,
-                          { color: colors.textPrimary },
-                        ]}
-                      >
-                        ₱{parseFloat(fee.amount).toLocaleString()}
-                      </Text>
-                    </View>
-                  ))}
-                </>
-              )}
-              <View
-                style={[
-                  modalStyles.divider,
-                  { backgroundColor: colors.border },
-                ]}
-              />
-              <View style={modalStyles.row}>
-                <Text style={[modalStyles.totalLabel, { color: colors.brand }]}>
-                  Total
+                <Image
+                  source={require("../../assets/logo.png")}
+                  style={modalStyles.logo}
+                />
+                <Text
+                  style={[modalStyles.receiptTitle, { color: colors.brand }]}
+                >
+                  Non-UniPay
                 </Text>
                 <Text
-                  style={[modalStyles.totalAmount, { color: colors.brand }]}
+                  style={[
+                    modalStyles.receiptSub,
+                    { color: colors.textSecondary },
+                  ]}
                 >
-                  ₱{parseFloat(receiptData.amount).toLocaleString()}
+                  Official Payment Receipt
                 </Text>
+                <View
+                  style={[
+                    modalStyles.divider,
+                    { backgroundColor: colors.border },
+                  ]}
+                />
+                {[
+                  ["Reference No", receiptData.reference_no],
+                  ["Date", receiptData.date],
+                  ["Payment Method", receiptData.method],
+                  ["Semester", receiptData.semester],
+                ].map(([label, value]) => (
+                  <View key={label} style={modalStyles.row}>
+                    <Text
+                      style={[
+                        modalStyles.label,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                    <Text
+                      style={[modalStyles.value, { color: colors.textPrimary }]}
+                    >
+                      {value}
+                    </Text>
+                  </View>
+                ))}
+                <View
+                  style={[
+                    modalStyles.divider,
+                    { backgroundColor: colors.border },
+                  ]}
+                />
+                {receiptData.fees && receiptData.fees.length > 0 && (
+                  <>
+                    <Text
+                      style={[
+                        modalStyles.breakdownTitle,
+                        { color: colors.brand },
+                      ]}
+                    >
+                      Fee Breakdown
+                    </Text>
+                    {receiptData.fees.map((fee, index) => (
+                      <View key={index} style={modalStyles.row}>
+                        <Text
+                          style={[
+                            modalStyles.label,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          {fee.name || fee.fee_name}
+                        </Text>
+                        <Text
+                          style={[
+                            modalStyles.value,
+                            { color: colors.textPrimary },
+                          ]}
+                        >
+                          ₱{parseFloat(fee.amount).toLocaleString()}
+                        </Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+                <View
+                  style={[
+                    modalStyles.divider,
+                    { backgroundColor: colors.border },
+                  ]}
+                />
+                <View style={modalStyles.row}>
+                  <Text
+                    style={[modalStyles.totalLabel, { color: colors.brand }]}
+                  >
+                    Total
+                  </Text>
+                  <Text
+                    style={[modalStyles.totalAmount, { color: colors.brand }]}
+                  >
+                    ₱{parseFloat(receiptData.amount).toLocaleString()}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    modalStyles.statusBadge,
+                    { backgroundColor: getStatusColor(receiptData.status) },
+                  ]}
+                >
+                  <Text style={modalStyles.statusText}>
+                    {receiptData.status.toUpperCase()}
+                  </Text>
+                </View>
               </View>
-              <View
-                style={[
-                  modalStyles.statusBadge,
-                  { backgroundColor: getStatusColor(receiptData.status) },
-                ]}
-              >
-                <Text style={modalStyles.statusText}>
-                  {receiptData.status.toUpperCase()}
-                </Text>
-              </View>
-            </View>
-          </ScrollView>
+            </ScrollView>
 
-          <TouchableOpacity
-            style={[
-              modalStyles.downloadBtn,
-              {
-                backgroundColor: colors.brand,
-                marginHorizontal: 20,
-                marginVertical: 14,
-              },
-            ]}
-            onPress={handleDownload}
-            disabled={downloading}
-          >
-            {downloading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="download-outline" size={20} color="#fff" />
-                <Text style={modalStyles.downloadText}>Download Receipt</Text>
-              </>
-            )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                modalStyles.downloadBtn,
+                {
+                  backgroundColor: colors.brand,
+                  marginHorizontal: 20,
+                  marginVertical: 14,
+                },
+              ]}
+              onPress={handleDownload}
+              disabled={downloading}
+            >
+              {downloading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="download-outline" size={20} color="#fff" />
+                  <Text style={modalStyles.downloadText}>Download Receipt</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+
+      <AlertModal
+        visible={alertModal.visible}
+        title={alertModal.title}
+        message={alertModal.message}
+        onClose={() =>
+          setAlertModal({ visible: false, title: "", message: "" })
+        }
+      />
+    </>
   );
 };
 
@@ -953,5 +1031,68 @@ const styles = StyleSheet.create({
     marginTop: 5,
     fontSize: 13,
     color: "rgba(255,255,255,0.4)",
+  },
+
+  // Modal styles (reused from NotificationsScreen)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  modalCard: {
+    width: "100%",
+    borderRadius: 28,
+    padding: 28,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalMessage: {
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  modalButtonRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  modalCancelButton: {
+    borderWidth: 1,
+    backgroundColor: "transparent",
+  },
+  modalConfirmButton: {
+    backgroundColor: "#0f3c91",
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  modalConfirmButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

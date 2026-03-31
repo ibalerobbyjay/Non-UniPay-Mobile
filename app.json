@@ -2,13 +2,15 @@
   "expo": {
     "name": "Non-UniPay",
     "slug": "nonunipay-mobile",
+    "owner": "robby_jay0104",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "nonunipay",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
-
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nonunipay.mobile"
@@ -52,7 +54,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "9d16ea2e-2711-4d06-806a-0dfd181b9765"
+        "projectId": "9ad22b6f-755b-494f-bc00-789ffc9e99d0"
       }
     }
   }
