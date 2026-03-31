@@ -3,10 +3,10 @@ import { Picker } from "@react-native-picker/picker";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Animated,
   Image,
   Linking,
   Modal,
@@ -126,6 +126,45 @@ const TERMS_CONTENT = [
     body: `For questions about these terms, email us at ${SUPPORT_EMAIL}.`,
   },
 ];
+
+// ─── Reusable Alert Modal ────────────────────────────────────────────────────
+function AlertModal({ visible, title, message, icon, onClose }) {
+  const { colors } = useTheme();
+  const iconName = icon || "alert-circle-outline";
+  const iconColor = icon === "checkmark-circle" ? "#22c55e" : colors.brand;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={alertModalStyles.overlay}>
+        <View
+          style={[alertModalStyles.card, { backgroundColor: colors.surface }]}
+        >
+          <Ionicons name={iconName} size={56} color={iconColor} />
+          <Text style={[alertModalStyles.title, { color: colors.textPrimary }]}>
+            {title}
+          </Text>
+          <Text
+            style={[alertModalStyles.message, { color: colors.textSecondary }]}
+          >
+            {message}
+          </Text>
+          <TouchableOpacity
+            style={[alertModalStyles.button, { backgroundColor: colors.brand }]}
+            onPress={onClose}
+          >
+            <Text style={alertModalStyles.buttonText}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 // ─── Reusable Legal Modal ────────────────────────────────────────────────────
 function LegalModal({ visible, onClose, title, sections }) {
@@ -268,6 +307,142 @@ function LogoutModal({ visible, onConfirm, onCancel, colors }) {
   );
 }
 
+// ─── Logout Loading Overlay ───────────────────────────────────────────────────
+function LogoutLoadingOverlay({ visible }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.1,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      fadeAnim.setValue(0);
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="none">
+      <Animated.View
+        style={[logoutLoadingStyles.overlay, { opacity: fadeAnim }]}
+      >
+        <LinearGradient
+          colors={["rgba(5,15,50,0.88)", "rgba(10,25,80,0.95)"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <Animated.View
+          style={[
+            logoutLoadingStyles.logoRing,
+            { transform: [{ scale: pulseAnim }] },
+          ]}
+        >
+          <Image
+            source={require("../../assets/logo.png")}
+            style={logoutLoadingStyles.logo}
+          />
+        </Animated.View>
+        <ActivityIndicator
+          size="large"
+          color="#f4b400"
+          style={{ marginTop: 32 }}
+        />
+        <Text style={logoutLoadingStyles.text}>Signing out…</Text>
+        <Text style={logoutLoadingStyles.subText}>Please wait</Text>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+// ─── Profile Loading Overlay (similar to other screens) ──────────────────────
+function ProfileLoadingOverlay({ visible }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.12,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      fadeAnim.setValue(0);
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <Animated.View
+        style={[profileLoadingStyles.overlay, { opacity: fadeAnim }]}
+      >
+        <LinearGradient
+          colors={["rgba(5,15,50,0.88)", "rgba(10,25,80,0.95)"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <Animated.View
+          style={[
+            profileLoadingStyles.logoRing,
+            { transform: [{ scale: pulseAnim }] },
+          ]}
+        >
+          <Image
+            source={require("../../assets/logo.png")}
+            style={profileLoadingStyles.logo}
+          />
+        </Animated.View>
+        <ActivityIndicator
+          size="large"
+          color="#f4b400"
+          style={{ marginTop: 32 }}
+        />
+        <Text style={profileLoadingStyles.text}>Loading profile…</Text>
+        <Text style={profileLoadingStyles.subText}>Please wait</Text>
+      </Animated.View>
+    </Modal>
+  );
+}
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function ProfileScreen({ navigation }) {
   useEffect(() => {
@@ -291,6 +466,7 @@ export default function ProfileScreen({ navigation }) {
   const [nextAllowed, setNextAllowed] = useState(null);
   const [pictureCooldown, setPictureCooldown] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true); // NEW: for initial profile load
 
   // Security
   const [changingPassword, setChangingPassword] = useState(false);
@@ -308,6 +484,39 @@ export default function ProfileScreen({ navigation }) {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [showImagePickerModal, setShowImagePickerModal] = useState(false);
+
+  // Alert modal state
+  const [alertModal, setAlertModal] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    icon: null,
+    onConfirm: null,
+  });
+
+  const showAlert = (
+    title,
+    message,
+    icon = "alert-circle-outline",
+    onConfirm = null,
+  ) => {
+    setAlertModal({ visible: true, title, message, icon, onConfirm });
+  };
+
+  const closeAlert = () => {
+    if (alertModal.onConfirm) {
+      alertModal.onConfirm();
+    }
+    setAlertModal({
+      visible: false,
+      title: "",
+      message: "",
+      icon: null,
+      onConfirm: null,
+    });
+  };
 
   const loadProfile = async () => {
     try {
@@ -351,6 +560,8 @@ export default function ProfileScreen({ navigation }) {
       }
     } catch (error) {
       console.error("Error loading profile:", error);
+    } finally {
+      setInitialLoading(false);
     }
   };
 
@@ -373,34 +584,60 @@ export default function ProfileScreen({ navigation }) {
         ...formData,
         year_level: parseInt(formData.year_level) || 0,
       });
-      Alert.alert("Success", "Profile updated successfully.");
+      showAlert("Success", "Profile updated successfully.", "checkmark-circle");
       setEditing(false);
       loadProfile();
     } catch (error) {
       if (error.response?.status === 429) {
-        Alert.alert("Too Soon", error.response.data.message);
+        showAlert("Too Soon", error.response.data.message);
       } else if (error.response?.status === 422) {
         const errors = error.response.data.errors;
-        Alert.alert("Validation Error", Object.values(errors)[0][0]);
+        const firstError = Object.values(errors)[0][0];
+        showAlert("Validation Error", firstError);
       } else {
-        Alert.alert("Error", "Failed to update profile.");
+        showAlert("Error", "Failed to update profile.");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const pickImage = async () => {
+  // ─── Image picker functions ───────────────────────────────────────────────
+  const pickImage = () => {
     if (pictureCooldown) {
-      Alert.alert("Locked", pictureCooldown);
+      showAlert("Locked", pictureCooldown);
       return;
     }
-    const permissionResult =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert(
+    setShowImagePickerModal(true);
+  };
+
+  const takePhoto = async () => {
+    setShowImagePickerModal(false);
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      showAlert(
         "Permission required",
-        "Please allow access to your photo library.",
+        "Camera access is needed to take photos.",
+      );
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      uploadImage(result.assets[0].uri);
+    }
+  };
+
+  const pickFromGallery = async () => {
+    setShowImagePickerModal(false);
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      showAlert(
+        "Permission required",
+        "Gallery access is needed to select photos.",
       );
       return;
     }
@@ -409,9 +646,10 @@ export default function ProfileScreen({ navigation }) {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
-      base64: false,
     });
-    if (!result.canceled && result.assets[0]) uploadImage(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) {
+      uploadImage(result.assets[0].uri);
+    }
   };
 
   const uploadImage = async (uri) => {
@@ -427,15 +665,15 @@ export default function ProfileScreen({ navigation }) {
         headers: { "Content-Type": "multipart/form-data" },
       });
       if (response.data.success) {
-        Alert.alert("Success", "Profile picture updated.");
+        showAlert("Success", "Profile picture updated.", "checkmark-circle");
         loadProfile();
       } else {
-        Alert.alert("Error", response.data.message || "Upload failed");
+        showAlert("Error", response.data.message || "Upload failed");
       }
     } catch (error) {
       if (error.response?.status === 429)
-        Alert.alert("Too Soon", error.response.data.message);
-      else Alert.alert("Error", "Failed to upload image.");
+        showAlert("Too Soon", error.response.data.message);
+      else showAlert("Error", "Failed to upload image.");
     } finally {
       setUploading(false);
     }
@@ -447,19 +685,19 @@ export default function ProfileScreen({ navigation }) {
       !passwordForm.new_password ||
       !passwordForm.confirm_password
     ) {
-      Alert.alert("Missing Fields", "Please fill in all password fields.");
+      showAlert("Missing Fields", "Please fill in all password fields.");
       return;
     }
     if (passwordForm.new_password !== passwordForm.confirm_password) {
-      Alert.alert("Mismatch", "New passwords do not match.");
+      showAlert("Mismatch", "New passwords do not match.");
       return;
     }
     if (passwordForm.new_password.length < 8) {
-      Alert.alert("Too Short", "New password must be at least 8 characters.");
+      showAlert("Too Short", "New password must be at least 8 characters.");
       return;
     }
     if (passwordForm.new_password === passwordForm.current_password) {
-      Alert.alert(
+      showAlert(
         "Same Password",
         "New password must differ from your current one.",
       );
@@ -472,29 +710,27 @@ export default function ProfileScreen({ navigation }) {
         new_password: passwordForm.new_password,
         new_password_confirmation: passwordForm.confirm_password,
       });
-      Alert.alert("Success", "Password changed successfully.", [
-        {
-          text: "OK",
-          onPress: () => {
-            setChangingPassword(false);
-            setPasswordForm({
-              current_password: "",
-              new_password: "",
-              confirm_password: "",
-            });
-          },
+      showAlert(
+        "Success",
+        "Password changed successfully.",
+        "checkmark-circle",
+        () => {
+          setChangingPassword(false);
+          setPasswordForm({
+            current_password: "",
+            new_password: "",
+            confirm_password: "",
+          });
         },
-      ]);
+      );
     } catch (error) {
       if (error.response?.status === 422) {
-        Alert.alert(
-          "Validation Error",
-          Object.values(error.response.data.errors)[0][0],
-        );
+        const msg = Object.values(error.response.data.errors)[0][0];
+        showAlert("Validation Error", msg);
       } else if (error.response?.status === 403) {
-        Alert.alert("Wrong Password", "Your current password is incorrect.");
+        showAlert("Wrong Password", "Your current password is incorrect.");
       } else {
-        Alert.alert("Error", "Failed to change password. Please try again.");
+        showAlert("Error", "Failed to change password. Please try again.");
       }
     } finally {
       setPasswordLoading(false);
@@ -507,23 +743,32 @@ export default function ProfileScreen({ navigation }) {
     if (canOpen) {
       await Linking.openURL(mailtoUrl);
     } else {
-      Alert.alert(
+      showAlert(
         "No Mail App Found",
         `Please send your inquiry directly to:\n\n${SUPPORT_EMAIL}`,
-        [{ text: "OK" }],
       );
     }
   };
 
   const handleLogout = () => setShowLogoutModal(true);
 
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
     setShowLogoutModal(false);
-    logout();
+    setTimeout(async () => {
+      setLoggingOut(true);
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      await logout();
+      setLoggingOut(false);
+    }, 150);
   };
 
   const strength = getPasswordStrength(passwordForm.new_password);
   const s = makeStyles(colors);
+
+  // Show loading overlay while initial profile is loading
+  if (initialLoading) {
+    return <ProfileLoadingOverlay visible={initialLoading} />;
+  }
 
   return (
     <>
@@ -656,7 +901,7 @@ export default function ProfileScreen({ navigation }) {
                   />
                 </View>
 
-                {/* ✅ Course Picker — dark mode aware */}
+                {/* Course Picker */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Course</Text>
                   <View
@@ -702,7 +947,7 @@ export default function ProfileScreen({ navigation }) {
                   </View>
                 </View>
 
-                {/* ✅ Year Level Picker — dark mode aware */}
+                {/* Year Level Picker */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Year Level</Text>
                   <View
@@ -1162,6 +1407,75 @@ export default function ProfileScreen({ navigation }) {
         onCancel={() => setShowLogoutModal(false)}
         colors={colors}
       />
+
+      {/* Logout Loading Overlay */}
+      <LogoutLoadingOverlay visible={loggingOut} />
+
+      {/* Alert Modal */}
+      <AlertModal
+        visible={alertModal.visible}
+        title={alertModal.title}
+        message={alertModal.message}
+        icon={alertModal.icon}
+        onClose={closeAlert}
+      />
+
+      {/* Image Picker Modal */}
+      <Modal
+        visible={showImagePickerModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowImagePickerModal(false)}
+      >
+        <View style={alertModalStyles.overlay}>
+          <View
+            style={[alertModalStyles.card, { backgroundColor: colors.surface }]}
+          >
+            <Ionicons name="camera-outline" size={56} color={colors.brand} />
+            <Text
+              style={[alertModalStyles.title, { color: colors.textPrimary }]}
+            >
+              Update Profile Picture
+            </Text>
+            <Text
+              style={[
+                alertModalStyles.message,
+                { color: colors.textSecondary },
+              ]}
+            >
+              Choose an option
+            </Text>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  { backgroundColor: colors.brand, flex: 1 },
+                ]}
+                onPress={takePhoto}
+              >
+                <Text style={styles.saveButtonText}>Take Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  { backgroundColor: colors.brand, flex: 1 },
+                ]}
+                onPress={pickFromGallery}
+              >
+                <Text style={styles.saveButtonText}>Gallery</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={{ marginTop: 10, padding: 8 }}
+              onPress={() => setShowImagePickerModal(false)}
+            >
+              <Text style={{ color: colors.textMuted, fontWeight: "500" }}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -1301,6 +1615,51 @@ function makeStyles(colors) {
 }
 
 // ─── Modal Styles ─────────────────────────────────────────────────────────────
+const alertModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  card: {
+    width: "100%",
+    borderRadius: 28,
+    padding: 28,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "800",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  message: {
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  button: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 30,
+    minWidth: 120,
+    alignItems: "center",
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+});
+
 const modalStyles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end" },
   sheet: {
@@ -1344,7 +1703,6 @@ const modalStyles = StyleSheet.create({
   closeFooterText: { color: "#fff", fontWeight: "700", fontSize: 16 },
 });
 
-// ─── Logout Modal Styles ──────────────────────────────────────────────────────
 const logoutModalStyles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -1394,6 +1752,81 @@ const logoutModalStyles = StyleSheet.create({
   confirmBtn: { backgroundColor: "#f44336" },
   cancelText: { fontSize: 15, fontWeight: "600" },
   confirmText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+});
+
+const logoutLoadingStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logoRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: "rgba(244,180,0,0.65)",
+    overflow: "hidden",
+    shadowColor: "#f4b400",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 22,
+    elevation: 14,
+  },
+  logo: {
+    width: "100%",
+    height: "100%",
+  },
+  text: {
+    marginTop: 20,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.3,
+  },
+  subText: {
+    marginTop: 5,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.4)",
+  },
+});
+
+// ─── Profile Loading Overlay Styles ──────────────────────────────────────────
+const profileLoadingStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logoRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: "rgba(244,180,0,0.65)",
+    overflow: "hidden",
+    shadowColor: "#f4b400",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 22,
+    elevation: 14,
+  },
+  logo: {
+    width: "100%",
+    height: "100%",
+  },
+  text: {
+    marginTop: 20,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.3,
+  },
+  subText: {
+    marginTop: 5,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.4)",
+  },
 });
 
 // ─── Static Styles ────────────────────────────────────────────────────────────

@@ -4,7 +4,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Image,
   ImageBackground,
@@ -41,18 +40,49 @@ export default function LoginScreen({ navigation }) {
   // Validation
   const [emailError, setEmailError] = useState("");
 
-  // ─── Lockout state ────────────────────────────────────────────────────────
+  // Lockout state
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutEnd, setLockoutEnd] = useState(null);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
   const [lockoutCount, setLockoutCount] = useState(0);
   const [lockoutDuration, setLockoutDuration] = useState(0);
 
-  // Forgot Password
+  // Forgot Password modal
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const modalAnim = useRef(new Animated.Value(0)).current;
+
+  // ─── Toast state ───────────────────────────────────────────────────────
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("error"); // 'error' or 'info'
+  const toastTimeout = useRef(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Loading screen pulse animation
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (loading) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.12,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+  }, [loading]);
 
   // Email validation
   useEffect(() => {
@@ -65,7 +95,7 @@ export default function LoginScreen({ navigation }) {
     }
   }, [email]);
 
-  // ─── Lockout countdown ────────────────────────────────────────────────────
+  // Lockout countdown
   useEffect(() => {
     if (!lockoutEnd) return;
     const interval = setInterval(() => {
@@ -82,7 +112,7 @@ export default function LoginScreen({ navigation }) {
     return () => clearInterval(interval);
   }, [lockoutEnd]);
 
-  // Modal animation
+  // Forgot Password modal animation
   useEffect(() => {
     if (forgotPasswordVisible) {
       Animated.spring(modalAnim, {
@@ -96,16 +126,43 @@ export default function LoginScreen({ navigation }) {
     }
   }, [forgotPasswordVisible]);
 
+  // ─── Toast helper ──────────────────────────────────────────────────────
+  const showToast = (message, type = "error") => {
+    // Clear any existing timeout
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    // Auto-hide after 5 seconds
+    toastTimeout.current = setTimeout(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setToastVisible(false);
+        setToastMessage("");
+      });
+    }, 5000);
+  };
+
   const isFormValid = () =>
     email.length > 0 && password.length > 0 && emailError === "";
 
   const isLocked = !!lockoutEnd;
 
-  // ─── Login with escalating lockout ───────────────────────────────────────
+  // ─── Login with escalating lockout ────────────────────────────────────
   const handleLogin = async () => {
     if (isLocked) return;
     if (!isFormValid()) {
-      Alert.alert("Error", "Please enter a valid email and password");
+      showToast("Please enter a valid email and password");
       return;
     }
 
@@ -114,11 +171,13 @@ export default function LoginScreen({ navigation }) {
       const result = await login(email, password);
 
       if (!result.success) {
+        // Hide loading before showing toast
+        setLoading(false);
+
         const newAttempts = failedAttempts + 1;
 
         if (newAttempts >= MAX_ATTEMPTS) {
           const newLockoutCount = lockoutCount + 1;
-          // Doubles every lockout: 30s → 60s → 120s → 240s ...
           const duration =
             BASE_LOCKOUT_SECONDS * Math.pow(2, newLockoutCount - 1);
 
@@ -128,19 +187,17 @@ export default function LoginScreen({ navigation }) {
           setLockoutEnd(Date.now() + duration * 1000);
           setLockoutSeconds(duration);
 
-          Alert.alert(
-            "Account Temporarily Locked",
+          showToast(
             `Too many failed attempts. Please wait ${formatDuration(duration)} before trying again.`,
           );
         } else {
           setFailedAttempts(newAttempts);
-          Alert.alert(
-            "Login Failed",
+          showToast(
             `${result.message}\n\nAttempt ${newAttempts} of ${MAX_ATTEMPTS}.`,
           );
         }
       } else {
-        // Reset everything on success
+        // Success – reset lockout state
         setFailedAttempts(0);
         setLockoutEnd(null);
         setLockoutSeconds(0);
@@ -149,22 +206,26 @@ export default function LoginScreen({ navigation }) {
 
         if (result.user && result.user.role === "admin") {
           await logout();
-          Alert.alert(
-            "Access Denied",
+          showToast(
             "Admin accounts cannot log in to the mobile app. Please use the web admin panel.",
+            "info",
           );
+          setLoading(false);
           return;
         }
         navigation.replace("MainTabs", { screen: "Home" });
       }
     } catch (error) {
-      Alert.alert("Error", "Something went wrong.");
-    } finally {
       setLoading(false);
+      console.error("Login error:", error);
+      showToast("Something went wrong. Please try again.");
+    } finally {
+      // Safety: if still loading (e.g., success case we don't set loading false here)
+      if (loading) setLoading(false);
     }
   };
 
-  // ─── Forgot Password ──────────────────────────────────────────────────────
+  // ─── Forgot Password (unchanged, still uses Alert for simplicity) ─────
   const handleForgotPassword = async () => {
     if (!resetEmail) {
       Alert.alert("Error", "Please enter your email address");
@@ -320,7 +381,7 @@ export default function LoginScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            {/* ─── Attempt dots ──────────────────────────────────────────── */}
+            {/* Attempt dots */}
             {failedAttempts > 0 && !isLocked && (
               <View style={styles.attemptRow}>
                 {[1, 2, 3].map((i) => (
@@ -335,7 +396,7 @@ export default function LoginScreen({ navigation }) {
               </View>
             )}
 
-            {/* ─── Lockout warning ───────────────────────────────────────── */}
+            {/* Lockout warning */}
             {isLocked && (
               <View style={styles.lockoutBox}>
                 <View style={styles.lockoutLeft}>
@@ -357,7 +418,7 @@ export default function LoginScreen({ navigation }) {
               </View>
             )}
 
-            {/* ─── Escalation hint ───────────────────────────────────────── */}
+            {/* Escalation hint */}
             {isLocked && lockoutCount > 1 && (
               <Text style={styles.lockoutHint}>
                 Each lockout doubles the wait:{" "}
@@ -368,7 +429,7 @@ export default function LoginScreen({ navigation }) {
               </Text>
             )}
 
-            {/* ─── Login button ──────────────────────────────────────────── */}
+            {/* Login button */}
             <TouchableOpacity
               style={[
                 styles.loginButton,
@@ -377,15 +438,11 @@ export default function LoginScreen({ navigation }) {
               onPress={handleLogin}
               disabled={loading || !isFormValid() || isLocked}
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.loginText}>
-                  {isLocked
-                    ? `Locked — wait ${formatDuration(lockoutSeconds)}`
-                    : "Login"}
-                </Text>
-              )}
+              <Text style={styles.loginText}>
+                {isLocked
+                  ? `Locked — wait ${formatDuration(lockoutSeconds)}`
+                  : "Login"}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -405,7 +462,40 @@ export default function LoginScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* FORGOT PASSWORD MODAL */}
+      {/* FULL‑SCREEN LOADING OVERLAY (unchanged) */}
+      <Modal visible={loading} transparent animationType="fade">
+        <View style={styles.loadingOverlay}>
+          <BlurView
+            intensity={40}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={["rgba(5,15,50,0.88)", "rgba(10,25,80,0.95)"]}
+            style={StyleSheet.absoluteFill}
+          />
+          <Animated.View
+            style={[
+              styles.loadingLogoRing,
+              { transform: [{ scale: pulseAnim }] },
+            ]}
+          >
+            <Image
+              source={require("../../assets/logo.png")}
+              style={styles.loadingLogo}
+            />
+          </Animated.View>
+          <ActivityIndicator
+            size="large"
+            color="#f4b400"
+            style={{ marginTop: 32 }}
+          />
+          <Text style={styles.loadingText}>Signing you in…</Text>
+          <Text style={styles.loadingSubText}>Please wait</Text>
+        </View>
+      </Modal>
+
+      {/* FORGOT PASSWORD MODAL (unchanged) */}
       <Modal
         visible={forgotPasswordVisible}
         transparent
@@ -494,6 +584,24 @@ export default function LoginScreen({ navigation }) {
           </KeyboardAvoidingView>
         </Animated.View>
       </Modal>
+
+      {/* ─── TOAST NOTIFICATION (top, auto‑dismiss after 5s) ──────────────── */}
+      {toastVisible && (
+        <Animated.View
+          style={[
+            styles.toastContainer,
+            { opacity: fadeAnim },
+            toastType === "error" ? styles.toastError : styles.toastInfo,
+          ]}
+        >
+          <Ionicons
+            name={toastType === "error" ? "alert-circle" : "information-circle"}
+            size={22}
+            color="#fff"
+          />
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </Animated.View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -580,7 +688,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // ─── Attempt dots ─────────────────────────────────────────────────────────
+  // Attempt dots
   attemptRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -598,13 +706,8 @@ const styles = StyleSheet.create({
   attemptDotFilled: {
     backgroundColor: "#e24b4a",
   },
-  attemptText: {
-    fontSize: 12,
-    color: "#e24b4a",
-    marginLeft: 4,
-  },
 
-  // ─── Lockout box ──────────────────────────────────────────────────────────
+  // Lockout box
   lockoutBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -646,7 +749,7 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
 
-  // ─── Buttons ──────────────────────────────────────────────────────────────
+  // Buttons
   loginButton: {
     backgroundColor: "#0f3c91",
     padding: 15,
@@ -677,7 +780,43 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // ─── Modal ────────────────────────────────────────────────────────────────
+  // Full‑screen loading overlay
+  loadingOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingLogoRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: "rgba(244,180,0,0.65)",
+    overflow: "hidden",
+    shadowColor: "#f4b400",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 22,
+    elevation: 14,
+  },
+  loadingLogo: {
+    width: "100%",
+    height: "100%",
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.3,
+  },
+  loadingSubText: {
+    marginTop: 5,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.4)",
+  },
+
+  // Modal (forgot password)
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.65)",
@@ -763,4 +902,39 @@ const styles = StyleSheet.create({
   },
   cancelButton: { padding: 12, alignItems: "center" },
   cancelButtonText: { color: "#999", fontSize: 15, fontWeight: "600" },
+
+  // ─── Toast styles ──────────────────────────────────────────────────────
+  toastContainer: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 50 : 30,
+    left: 20,
+    right: 20,
+    backgroundColor: "#333",
+    borderRadius: 25,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  toastError: {
+    backgroundColor: "#e24b4a",
+  },
+  toastInfo: {
+    backgroundColor: "#0f3c91",
+  },
+  toastText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 10,
+    flex: 1,
+    textAlign: "center",
+  },
 });

@@ -215,14 +215,6 @@ export default function ChatbotScreen({ navigation }) {
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
-        {navigation && (
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backBtn}
-          >
-            <Ionicons name="chevron-back" size={26} color="#fff" />
-          </TouchableOpacity>
-        )}
         <View style={styles.headerCenter}>
           <View style={styles.headerAvatar}>
             <Text style={styles.headerAvatarText}>U</Text>

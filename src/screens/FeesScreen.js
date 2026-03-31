@@ -1,9 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Image,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -20,9 +24,33 @@ export default function FeesScreen({ navigation }) {
 
   const { colors } = useTheme();
   const [breakdown, setBreakdown] = useState(null);
-  const [examPeriod, setExamPeriod] = useState(null); // ← NEW
+  const [examPeriod, setExamPeriod] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Loading overlay pulse animation
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (loading) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.12,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+  }, [loading]);
 
   useFocusEffect(
     useCallback(() => {
@@ -37,7 +65,7 @@ export default function FeesScreen({ navigation }) {
         api.get("/exam-period/current").catch(() => ({ data: {} })),
       ]);
       setBreakdown(breakdownRes.data.breakdown);
-      setExamPeriod(examPeriodRes.data); // { exam_period, semester, school_year }
+      setExamPeriod(examPeriodRes.data);
     } catch (error) {
       console.error("Error loading fees:", error);
     } finally {
@@ -51,16 +79,40 @@ export default function FeesScreen({ navigation }) {
     setRefreshing(false);
   };
 
+  // If still loading (initial load) show the full-screen overlay
   if (loading) {
     return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: colors.background },
-        ]}
-      >
-        <ActivityIndicator size="large" color={colors.brand} />
-      </View>
+      <Modal visible={loading} transparent animationType="fade">
+        <View style={styles.loadingOverlay}>
+          <BlurView
+            intensity={40}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={["rgba(5,15,50,0.88)", "rgba(10,25,80,0.95)"]}
+            style={StyleSheet.absoluteFill}
+          />
+          <Animated.View
+            style={[
+              styles.loadingLogoRing,
+              { transform: [{ scale: pulseAnim }] },
+            ]}
+          >
+            <Image
+              source={require("../../assets/logo.png")}
+              style={styles.loadingLogo}
+            />
+          </Animated.View>
+          <ActivityIndicator
+            size="large"
+            color="#f4b400"
+            style={{ marginTop: 32 }}
+          />
+          <Text style={styles.loadingText}>Loading fees…</Text>
+          <Text style={styles.loadingSubText}>Please wait</Text>
+        </View>
+      </Modal>
     );
   }
 
@@ -413,7 +465,43 @@ function FeeSection({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" }, // kept for reference, not used
+
+  // Full-screen loading overlay (copied from LoginScreen)
+  loadingOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingLogoRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: "rgba(244,180,0,0.65)",
+    overflow: "hidden",
+    shadowColor: "#f4b400",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 22,
+    elevation: 14,
+  },
+  loadingLogo: {
+    width: "100%",
+    height: "100%",
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.3,
+  },
+  loadingSubText: {
+    marginTop: 5,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.4)",
+  },
 
   // Header
   headerGradient: {

@@ -1,11 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createStackNavigator } from "@react-navigation/stack";
+import { LinearGradient } from "expo-linear-gradient";
+import { useContext, useEffect, useRef, useState } from "react";
 import {
-  CardStyleInterpolators,
-  createStackNavigator,
-} from "@react-navigation/stack";
-import { useContext, useEffect, useRef } from "react";
-import { Animated, Easing, StyleSheet, TouchableOpacity } from "react-native";
+  Animated,
+  Easing,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 
@@ -25,7 +30,147 @@ const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 /* ─────────────────────────────────────────────
-   🔥 Animated UniBot Button (UNCHANGED)
+   Branded Splash / Loading Screen
+───────────────────────────────────────────── */
+function SplashScreen() {
+  const logoScale = useRef(new Animated.Value(0.7)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const titleOpacity = useRef(new Animated.Value(0)).current;
+  const titleY = useRef(new Animated.Value(16)).current;
+  const dotOpacity = [
+    useRef(new Animated.Value(0.2)).current,
+    useRef(new Animated.Value(0.2)).current,
+    useRef(new Animated.Value(0.2)).current,
+  ];
+  const ringScale = useRef(new Animated.Value(0.8)).current;
+  const ringOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Logo entrance
+    Animated.parallel([
+      Animated.spring(logoScale, {
+        toValue: 1,
+        tension: 55,
+        friction: 9,
+        useNativeDriver: true,
+        delay: 100,
+      }),
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+        delay: 100,
+      }),
+      Animated.timing(ringOpacity, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+        delay: 300,
+      }),
+      Animated.spring(ringScale, {
+        toValue: 1,
+        tension: 40,
+        friction: 8,
+        useNativeDriver: true,
+        delay: 300,
+      }),
+      Animated.timing(titleOpacity, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+        delay: 500,
+      }),
+      Animated.spring(titleY, {
+        toValue: 0,
+        tension: 60,
+        friction: 10,
+        useNativeDriver: true,
+        delay: 500,
+      }),
+    ]).start();
+
+    // Staggered dot pulse loop
+    const animateDots = () => {
+      const seq = dotOpacity.map((dot, i) =>
+        Animated.sequence([
+          Animated.delay(i * 180),
+          Animated.timing(dot, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(dot, {
+            toValue: 0.2,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      Animated.loop(Animated.stagger(180, seq)).start();
+    };
+    const dotTimer = setTimeout(animateDots, 800);
+    return () => clearTimeout(dotTimer);
+  }, []);
+
+  return (
+    <View style={splash.container}>
+      <LinearGradient
+        colors={["#04122e", "#091d50", "#0a2060"]}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Outer decorative ring */}
+      <Animated.View
+        style={[
+          splash.outerRing,
+          { transform: [{ scale: ringScale }], opacity: ringOpacity },
+        ]}
+      />
+
+      {/* Logo */}
+      <Animated.View
+        style={[
+          splash.logoWrap,
+          { transform: [{ scale: logoScale }], opacity: logoOpacity },
+        ]}
+      >
+        <LinearGradient
+          colors={["rgba(244,180,0,0.25)", "rgba(244,180,0,0.05)"]}
+          style={splash.logoGlow}
+        />
+        <Image
+          source={require("../../assets/logo.png")}
+          style={splash.logo}
+          resizeMode="cover"
+        />
+      </Animated.View>
+
+      {/* App name + tagline */}
+      <Animated.View
+        style={[
+          splash.textBlock,
+          { opacity: titleOpacity, transform: [{ translateY: titleY }] },
+        ]}
+      >
+        <Animated.Text style={splash.appName}>Non-UniPay</Animated.Text>
+        <Animated.Text style={splash.tagline}>
+          School Fee Payment & Exam Clearance
+        </Animated.Text>
+      </Animated.View>
+
+      {/* Loading dots */}
+      <View style={splash.dotsRow}>
+        {dotOpacity.map((anim, i) => (
+          <Animated.View key={i} style={[splash.dot, { opacity: anim }]} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Animated UniBot Button (UNCHANGED)
 ───────────────────────────────────────────── */
 function UniBotTabButton({ onPress, accessibilityState }) {
   const { colors } = useTheme();
@@ -117,7 +262,6 @@ function UniBotTabButton({ onPress, accessibilityState }) {
           },
         ]}
       />
-
       <Animated.View
         style={[
           styles.uniBotButton,
@@ -141,7 +285,7 @@ function UniBotTabButton({ onPress, accessibilityState }) {
 }
 
 /* ─────────────────────────────────────────────
-   🔥 Tab Navigator (WITH ANIMATION)
+   Tab Navigator
 ───────────────────────────────────────────── */
 function TabNavigator() {
   const { colors, isDark } = useTheme();
@@ -151,32 +295,26 @@ function TabNavigator() {
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-
-          if (route.name === "Home") {
+          if (route.name === "Home")
             iconName = focused ? "home" : "home-outline";
-          } else if (route.name === "Fees") {
+          else if (route.name === "Fees")
             iconName = focused ? "cash" : "cash-outline";
-          } else if (route.name === "Clearance") {
+          else if (route.name === "Clearance")
             iconName = focused
               ? "checkmark-circle"
               : "checkmark-circle-outline";
-          } else if (route.name === "Profile") {
+          else if (route.name === "Profile")
             iconName = focused ? "person" : "person-outline";
-          }
 
-          // 🔥 ANIMATION (scale)
           const scale = focused ? 1.15 : 1;
-
           return (
             <Animated.View style={{ transform: [{ scale }] }}>
               <Ionicons name={iconName} size={size} color={color} />
             </Animated.View>
           );
         },
-
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.textMuted,
-
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
@@ -188,18 +326,12 @@ function TabNavigator() {
           shadowRadius: 8,
           height: 62,
         },
-
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "600",
-        },
-
+        tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
         headerShown: false,
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Fees" component={FeesScreen} />
-
       <Tab.Screen
         name="Chatbot"
         component={ChatbotScreen}
@@ -214,7 +346,6 @@ function TabNavigator() {
           tabBarButton: (props) => <UniBotTabButton {...props} />,
         }}
       />
-
       <Tab.Screen name="Clearance" component={ClearanceScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
@@ -222,11 +353,39 @@ function TabNavigator() {
 }
 
 /* ─────────────────────────────────────────────
-   🔥 Root Navigator (WITH TRANSITION)
+   Root Navigator
 ───────────────────────────────────────────── */
 export default function AppNavigator() {
-  const { user } = useContext(AuthContext);
+  const { user, loading } = useContext(AuthContext);
   const { colors } = useTheme();
+
+  // Splash fade-out
+  const splashOpacity = useRef(new Animated.Value(1)).current;
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    if (!loading) {
+      // Give splash a beat to breathe, then fade it out
+      setTimeout(() => {
+        Animated.timing(splashOpacity, {
+          toValue: 0,
+          duration: 500,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }).start(() => setShowSplash(false));
+      }, 600);
+    }
+  }, [loading]);
+
+  if (showSplash) {
+    return (
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { opacity: splashOpacity }]}
+      >
+        <SplashScreen />
+      </Animated.View>
+    );
+  }
 
   return (
     <Stack.Navigator
@@ -234,23 +393,49 @@ export default function AppNavigator() {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: colors.textPrimary,
         cardStyle: { backgroundColor: colors.background },
-
-        // 🔥 TRANSITION
         gestureEnabled: true,
         gestureDirection: "horizontal",
 
+        // Smooth fade+slide transition
         transitionSpec: {
           open: {
-            animation: "timing",
-            config: { duration: 300 },
+            animation: "spring",
+            config: {
+              stiffness: 220,
+              damping: 26,
+              mass: 0.9,
+              overshootClamping: false,
+            },
           },
           close: {
             animation: "timing",
-            config: { duration: 250 },
+            config: { duration: 220, easing: Easing.out(Easing.ease) },
           },
         },
-
-        cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        cardStyleInterpolator: ({ current, next, layouts }) => {
+          return {
+            cardStyle: {
+              transform: [
+                {
+                  translateX: current.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [layouts.screen.width * 0.35, 0],
+                  }),
+                },
+              ],
+              opacity: current.progress.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [0, 0.7, 1],
+              }),
+            },
+            overlayStyle: {
+              opacity: current.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0.25],
+              }),
+            },
+          };
+        },
       }}
     >
       {user ? (
@@ -260,19 +445,16 @@ export default function AppNavigator() {
             component={TabNavigator}
             options={{ headerShown: false }}
           />
-
           <Stack.Screen
             name="Payment"
             component={PaymentScreen}
             options={{ headerShown: false }}
           />
-
           <Stack.Screen
             name="PaymentHistory"
             component={PaymentHistoryScreen}
             options={{ headerShown: false }}
           />
-
           <Stack.Screen
             name="Notifications"
             component={NotificationsScreen}
@@ -286,7 +468,6 @@ export default function AppNavigator() {
             component={LoginScreen}
             options={{ headerShown: false }}
           />
-
           <Stack.Screen
             name="Register"
             component={RegisterScreen}
@@ -298,7 +479,9 @@ export default function AppNavigator() {
   );
 }
 
-/* ───────────────────────────────────────────── */
+/* ─────────────────────────────────────────────
+   Styles
+───────────────────────────────────────────── */
 const styles = StyleSheet.create({
   uniBotWrapper: {
     flex: 1,
@@ -323,5 +506,70 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 10,
+  },
+});
+
+const splash = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  outerRing: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    borderWidth: 1.5,
+    borderColor: "rgba(244,180,0,0.2)",
+  },
+  logoWrap: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2.5,
+    borderColor: "rgba(244,180,0,0.55)",
+    overflow: "hidden",
+    shadowColor: "#f4b400",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 16,
+  },
+  logoGlow: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+  },
+  logo: {
+    width: "100%",
+    height: "100%",
+  },
+  textBlock: {
+    marginTop: 28,
+    alignItems: "center",
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: 0.5,
+  },
+  tagline: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.4)",
+    letterSpacing: 0.3,
+    textAlign: "center",
+  },
+  dotsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 48,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#f4b400",
   },
 });

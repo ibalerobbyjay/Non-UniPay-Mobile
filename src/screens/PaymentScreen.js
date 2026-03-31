@@ -1,11 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Linking,
+  Animated,
+  Image,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -15,6 +18,73 @@ import {
 } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
+
+// ─── Loading Overlay (shared) ────────────────────────────────────────────────
+function LoadingOverlay({ visible }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.12,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      fadeAnim.setValue(0);
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <Animated.View style={[styles.loadingOverlay, { opacity: fadeAnim }]}>
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+        <LinearGradient
+          colors={["rgba(5,15,50,0.88)", "rgba(10,25,80,0.95)"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <Animated.View
+          style={[
+            styles.loadingLogoRing,
+            { transform: [{ scale: pulseAnim }] },
+          ]}
+        >
+          <Image
+            source={require("../../assets/logo.png")}
+            style={styles.loadingLogo}
+          />
+        </Animated.View>
+        <ActivityIndicator
+          size="large"
+          color="#f4b400"
+          style={{ marginTop: 32 }}
+        />
+        <Text style={styles.loadingText}>Loading fees…</Text>
+        <Text style={styles.loadingSubText}>Please wait</Text>
+      </Animated.View>
+    </Modal>
+  );
+}
 
 export default function PaymentScreen({ navigation }) {
   useEffect(() => {
@@ -31,6 +101,7 @@ export default function PaymentScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
 
   const autoRefreshIntervalRef = useRef(null);
   const isFirstLoad = useRef(true);
@@ -116,6 +187,46 @@ export default function PaymentScreen({ navigation }) {
     });
   };
 
+  const getAllSelectableFees = () => {
+    const allFees = [
+      ...(feeBreakdown?.tuition?.fees || []),
+      ...(feeBreakdown?.miscellaneous?.fees || []),
+      ...(feeBreakdown?.exam?.fees || []),
+    ];
+    return allFees.filter(
+      (fee) => !paidFeeIds.has(fee.id) && !pendingFeeIds.has(fee.id),
+    );
+  };
+
+  const isAllSelected = (() => {
+    const selectableFees = getAllSelectableFees();
+    return (
+      selectableFees.length > 0 &&
+      selectableFees.every((fee) => !!selectedFees[fee.id])
+    );
+  })();
+
+  const selectAll = () => {
+    if (loading) return;
+    const selectableFees = getAllSelectableFees();
+
+    if (isAllSelected) {
+      setSelectedFees({});
+      setSelectedTotal(0);
+    } else {
+      const newSelected = {};
+      selectableFees.forEach((fee) => {
+        newSelected[fee.id] = { amount: parseFloat(fee.amount) };
+      });
+      const total = selectableFees.reduce(
+        (sum, fee) => sum + parseFloat(fee.amount),
+        0,
+      );
+      setSelectedFees(newSelected);
+      setSelectedTotal(total);
+    }
+  };
+
   const handlePayment = () => {
     if (selectedTotal === 0) {
       Alert.alert("Error", "Please select at least one fee to pay");
@@ -129,18 +240,12 @@ export default function PaymentScreen({ navigation }) {
       Alert.alert("Error", "Amount exceeds PayMongo maximum of ₱100,000");
       return;
     }
-    Alert.alert(
-      "Confirm Payment",
-      `Pay ₱${selectedTotal.toLocaleString()} for selected fees via GCash?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Proceed", onPress: processPayment },
-      ],
-    );
+    setConfirmModalVisible(true);
   };
 
   const processPayment = async () => {
     setLoading(true);
+    setConfirmModalVisible(false);
     try {
       const feeIds = Object.keys(selectedFees);
       const response = await api.post("/payments/initiate", {
@@ -148,22 +253,17 @@ export default function PaymentScreen({ navigation }) {
         fee_ids: feeIds,
       });
       if (response.data.success) {
-        const { payment_url, payment_id } = response.data;
+        const { payment_url } = response.data;
 
-        // Mark these fees as pending immediately
         setPendingFeeIds((prev) => new Set([...prev, ...feeIds]));
-        // Clear selected fees
         setSelectedFees({});
         setSelectedTotal(0);
 
         const supported = await Linking.canOpenURL(payment_url);
         if (supported) {
           await Linking.openURL(payment_url);
-          // The app will be backgrounded. When the user returns (via deep link),
-          // the screen will refresh (focus) and auto-refresh will pick up the updated status.
         } else {
           Alert.alert("Error", "Cannot open GCash payment page");
-          // Remove pending mark if we failed to open the URL
           setPendingFeeIds((prev) => {
             const newSet = new Set(prev);
             feeIds.forEach((id) => newSet.delete(id));
@@ -280,16 +380,7 @@ export default function PaymentScreen({ navigation }) {
   };
 
   if (fetching) {
-    return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: colors.background },
-        ]}
-      >
-        <ActivityIndicator size="large" color={colors.brand} />
-      </View>
-    );
+    return <LoadingOverlay visible={fetching} />;
   }
 
   const hasFees =
@@ -298,6 +389,8 @@ export default function PaymentScreen({ navigation }) {
       ...(feeBreakdown?.miscellaneous?.fees || []),
       ...(feeBreakdown?.exam?.fees || []),
     ].length > 0;
+
+  const selectableFeesCount = getAllSelectableFees().length;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -315,7 +408,33 @@ export default function PaymentScreen({ navigation }) {
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Pay Fees</Text>
-          <View style={{ width: 40 }} />
+          {hasFees && selectableFeesCount > 0 && (
+            <TouchableOpacity
+              onPress={selectAll}
+              disabled={loading}
+              style={[
+                styles.selectAllHeaderBtn,
+                {
+                  backgroundColor: isAllSelected
+                    ? colors.brand
+                    : "rgba(255,255,255,0.2)",
+                  borderColor: colors.brand,
+                },
+              ]}
+            >
+              <Ionicons
+                name={isAllSelected ? "checkbox" : "square-outline"}
+                size={16}
+                color={isAllSelected ? "#fff" : "#fff"}
+              />
+              <Text style={[styles.selectAllHeaderText, { color: "#fff" }]}>
+                {isAllSelected ? "Deselect All" : "Select All"}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {!(hasFees && selectableFeesCount > 0) && (
+            <View style={{ width: 40 }} />
+          )}
         </View>
       </LinearGradient>
 
@@ -333,9 +452,12 @@ export default function PaymentScreen({ navigation }) {
           <Ionicons name="card" size={80} color={colors.brand} />
         </View>
         <Text style={[styles.title, { color: colors.brand }]}>School Fees</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Select the fees you want to pay
-        </Text>
+
+        <View style={styles.subtitleRow}>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            Select the fees you want to pay
+          </Text>
+        </View>
 
         {hasFees ? (
           <View style={styles.feesContainer}>
@@ -419,6 +541,68 @@ export default function PaymentScreen({ navigation }) {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={confirmModalVisible}
+        onRequestClose={() => setConfirmModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.modalContainer, { backgroundColor: colors.surface }]}
+          >
+            <Ionicons
+              name="alert-circle-outline"
+              size={64}
+              color={colors.brand}
+            />
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+              Confirm Payment
+            </Text>
+            <Text
+              style={[styles.modalMessage, { color: colors.textSecondary }]}
+            >
+              Pay ₱{selectedTotal.toLocaleString()} for selected fees via GCash?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.modalCancelButton,
+                  { borderColor: colors.border },
+                ]}
+                onPress={() => setConfirmModalVisible(false)}
+              >
+                <Text
+                  style={[
+                    styles.modalButtonText,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.modalConfirmButton,
+                  { backgroundColor: colors.brand },
+                ]}
+                onPress={processPayment}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalConfirmButtonText}>Proceed</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -452,10 +636,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerTitle: { fontSize: 24, fontWeight: "bold", color: "#fff" },
+  selectAllHeaderBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  selectAllHeaderText: { fontSize: 13, fontWeight: "600" },
   content: { flex: 1, paddingHorizontal: 20, paddingTop: 20 },
   iconContainer: { alignItems: "center", marginBottom: 10 },
   title: { fontSize: 24, fontWeight: "bold", textAlign: "center" },
-  subtitle: { textAlign: "center", marginTop: 5, marginBottom: 20 },
+  subtitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 5,
+    marginBottom: 20,
+  },
+  subtitle: { textAlign: "center", fontSize: 14 },
   feesContainer: { paddingBottom: 20 },
   section: { marginBottom: 24 },
   sectionTitle: {
@@ -519,4 +721,98 @@ const styles = StyleSheet.create({
   },
   payButtonDisabled: { backgroundColor: "#94a3b8", opacity: 0.6 },
   payButtonText: { color: "#fff", fontSize: 18, fontWeight: "600" },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContainer: {
+    width: "80%",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCancelButton: {
+    borderWidth: 1,
+    backgroundColor: "transparent",
+  },
+  modalConfirmButton: {
+    backgroundColor: "transparent",
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  modalConfirmButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  // Loading overlay styles
+  loadingOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingLogoRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: "rgba(244,180,0,0.65)",
+    overflow: "hidden",
+    shadowColor: "#f4b400",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 22,
+    elevation: 14,
+  },
+  loadingLogo: {
+    width: "100%",
+    height: "100%",
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.3,
+  },
+  loadingSubText: {
+    marginTop: 5,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.4)",
+  },
 });

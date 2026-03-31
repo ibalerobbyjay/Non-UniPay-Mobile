@@ -1,9 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Image, // <-- added
+  Modal, // <-- added
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -24,9 +28,33 @@ export default function ClearanceScreen({ navigation }) {
 
   const [clearance, setClearance] = useState(null);
   const [breakdown, setBreakdown] = useState(null);
-  const [examPeriodData, setExamPeriodData] = useState(null); // { exam_period, semester, school_year }
+  const [examPeriodData, setExamPeriodData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Pulse animation for loading overlay
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (loading) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.12,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+  }, [loading]);
 
   useFocusEffect(
     useCallback(() => {
@@ -39,12 +67,11 @@ export default function ClearanceScreen({ navigation }) {
       const [clearanceRes, breakdownRes, examPeriodRes] = await Promise.all([
         api.get("/clearance"),
         api.get("/fees/breakdown"),
-        // Use the same endpoint as HomeScreen for consistency
         api.get("/exam-period/current").catch(() => ({ data: {} })),
       ]);
       setClearance(clearanceRes.data);
       setBreakdown(breakdownRes.data.breakdown);
-      setExamPeriodData(examPeriodRes.data); // { exam_period, semester, school_year }
+      setExamPeriodData(examPeriodRes.data);
     } catch (error) {
       console.error("Error loading clearance:", error);
     } finally {
@@ -58,16 +85,40 @@ export default function ClearanceScreen({ navigation }) {
     setRefreshing(false);
   };
 
+  // ─── Full‑screen loading overlay ────────────────────────────────────────
   if (loading) {
     return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: colors.background },
-        ]}
-      >
-        <ActivityIndicator size="large" color={colors.brand} />
-      </View>
+      <Modal visible={loading} transparent animationType="fade">
+        <View style={styles.loadingOverlay}>
+          <BlurView
+            intensity={40}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={["rgba(5,15,50,0.88)", "rgba(10,25,80,0.95)"]}
+            style={StyleSheet.absoluteFill}
+          />
+          <Animated.View
+            style={[
+              styles.loadingLogoRing,
+              { transform: [{ scale: pulseAnim }] },
+            ]}
+          >
+            <Image
+              source={require("../../assets/logo.png")}
+              style={styles.loadingLogo}
+            />
+          </Animated.View>
+          <ActivityIndicator
+            size="large"
+            color="#f4b400"
+            style={{ marginTop: 32 }}
+          />
+          <Text style={styles.loadingText}>Loading clearance…</Text>
+          <Text style={styles.loadingSubText}>Please wait</Text>
+        </View>
+      </Modal>
     );
   }
 
@@ -417,7 +468,43 @@ export default function ClearanceScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" }, // kept for reference, not used
+
+  // ─── Full‑screen loading overlay styles ────────────────────────────────
+  loadingOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingLogoRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: "rgba(244,180,0,0.65)",
+    overflow: "hidden",
+    shadowColor: "#f4b400",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 22,
+    elevation: 14,
+  },
+  loadingLogo: {
+    width: "100%",
+    height: "100%",
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.3,
+  },
+  loadingSubText: {
+    marginTop: 5,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.4)",
+  },
 
   // Header
   headerGradient: {

@@ -3,9 +3,9 @@ import { useFocusEffect, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Dimensions,
   Image,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -228,6 +228,7 @@ export default function HomeScreen({ navigation }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
+  const [modalVisible, setModalVisible] = useState(false); // Modal visibility state
 
   // ── Refs for onboarding measurements ───────────────────────────────────
   const refs = {
@@ -332,14 +333,13 @@ export default function HomeScreen({ navigation }) {
     }, [loadData, startPolling, stopPolling]),
   );
 
+  // ── Payment success modal (replaces Alert) ─────────────────────────────
   useFocusEffect(
     useCallback(() => {
-      if (route.params?.paymentSuccess) {
-        Alert.alert("Success", "Paid Successfully!");
-        loadData();
-        navigation.setParams({ paymentSuccess: false });
+      if (route.params?.paymentSuccess && !modalVisible) {
+        setModalVisible(true);
       }
-    }, [route.params?.paymentSuccess, loadData, navigation]),
+    }, [route.params?.paymentSuccess, modalVisible]),
   );
 
   // ── Auto-swipe ────────────────────────────────────────────────────────
@@ -849,6 +849,43 @@ export default function HomeScreen({ navigation }) {
         </View>
       </ScrollView>
 
+      {/* ── Payment Success Modal ── */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => {
+          // For Android back button, we just close the modal without triggering actions
+          setModalVisible(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[styles.modalContainer, { backgroundColor: colors.surface }]}
+          >
+            <Ionicons name="checkmark-circle" size={64} color={colors.brand} />
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+              Success!
+            </Text>
+            <Text
+              style={[styles.modalMessage, { color: colors.textSecondary }]}
+            >
+              Paid Successfully!
+            </Text>
+            <TouchableOpacity
+              style={[styles.modalButton, { backgroundColor: colors.brand }]}
+              onPress={() => {
+                setModalVisible(false);
+                loadData(); // Refresh data after payment
+                navigation.setParams({ paymentSuccess: false }); // Clear the param
+              }}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Onboarding Guide ── */}
       <OnboardingGuide
         userId={user?.id}
@@ -1103,4 +1140,46 @@ const styles = StyleSheet.create({
   actionInfo: { flex: 1, marginLeft: 16 },
   actionTitle: { fontSize: 17, fontWeight: "600", marginBottom: 2 },
   actionSubtitle: { fontSize: 14 },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContainer: {
+    width: "80%",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 30,
+    minWidth: 100,
+    alignItems: "center",
+  },
+  modalButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
 });

@@ -1,10 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Animated,
   FlatList,
   Image,
   ImageBackground,
@@ -50,6 +50,16 @@ export default function RegisterScreen({ navigation }) {
   // Modal states
   const [courseModalVisible, setCourseModalVisible] = useState(false);
   const [yearModalVisible, setYearModalVisible] = useState(false);
+
+  // Custom alert modal state
+  const [alertModalVisible, setAlertModalVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertSuccess, setAlertSuccess] = useState(false); // true for success, false for error
+  const modalAnim = useRef(new Animated.Value(0)).current;
+
+  // Loading overlay animation
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const courses = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
   const yearLevels = ["1", "2", "3", "4"];
@@ -139,6 +149,43 @@ export default function RegisterScreen({ navigation }) {
     }
   }, [formData.password, formData.password_confirmation]);
 
+  // Animation for alert modal
+  useEffect(() => {
+    if (alertModalVisible) {
+      Animated.spring(modalAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 7,
+      }).start();
+    } else {
+      modalAnim.setValue(0);
+    }
+  }, [alertModalVisible]);
+
+  // Loading overlay pulse animation
+  useEffect(() => {
+    if (loading) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.12,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+  }, [loading]);
+
   // Check if form is valid for submission
   const isFormValid = () => {
     return (
@@ -152,9 +199,16 @@ export default function RegisterScreen({ navigation }) {
     );
   };
 
+  const showAlert = (title, message, isSuccess = false) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertSuccess(isSuccess);
+    setAlertModalVisible(true);
+  };
+
   const handleRegister = async () => {
     if (!isFormValid()) {
-      Alert.alert("Error", "Please correct the errors before submitting");
+      showAlert("Error", "Please correct the errors before submitting", false);
       return;
     }
 
@@ -166,15 +220,24 @@ export default function RegisterScreen({ navigation }) {
     setLoading(false);
 
     if (result.success) {
-      Alert.alert(
+      showAlert(
         "Success",
         "Registration successful! Please wait for approval.",
-        [{ text: "OK", onPress: () => navigation.navigate("Login") }],
+        true,
       );
     } else {
-      Alert.alert("Registration Failed", result.message);
+      showAlert("Registration Failed", result.message, false);
     }
   };
+
+  const modalScale = modalAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.8, 1],
+  });
+  const modalOpacity = modalAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
 
   return (
     <KeyboardAvoidingView
@@ -514,71 +577,175 @@ export default function RegisterScreen({ navigation }) {
             />
           </View>
         </View>
-
-        {/* Course Modal */}
-        <Modal visible={courseModalVisible} transparent animationType="slide">
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Course</Text>
-                <TouchableOpacity onPress={() => setCourseModalVisible(false)}>
-                  <Ionicons name="close" size={28} color="#666" />
-                </TouchableOpacity>
-              </View>
-              <FlatList
-                data={courses}
-                keyExtractor={(item) => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.modalItem}
-                    onPress={() => {
-                      setFormData({ ...formData, course: item });
-                      setCourseModalVisible(false);
-                    }}
-                  >
-                    <Text style={styles.modalItemText}>{item}</Text>
-                    {formData.course === item && (
-                      <Ionicons name="checkmark" size={24} color="#0f3c91" />
-                    )}
-                  </TouchableOpacity>
-                )}
-              />
-            </View>
-          </View>
-        </Modal>
-
-        {/* Year Level Modal */}
-        <Modal visible={yearModalVisible} transparent animationType="slide">
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Year Level</Text>
-                <TouchableOpacity onPress={() => setYearModalVisible(false)}>
-                  <Ionicons name="close" size={28} color="#666" />
-                </TouchableOpacity>
-              </View>
-              <FlatList
-                data={yearLevels}
-                keyExtractor={(item) => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.modalItem}
-                    onPress={() => {
-                      setFormData({ ...formData, year_level: item });
-                      setYearModalVisible(false);
-                    }}
-                  >
-                    <Text style={styles.modalItemText}>{`Year ${item}`}</Text>
-                    {formData.year_level === item && (
-                      <Ionicons name="checkmark" size={24} color="#0f3c91" />
-                    )}
-                  </TouchableOpacity>
-                )}
-              />
-            </View>
-          </View>
-        </Modal>
       </ScrollView>
+
+      {/* FULL‑SCREEN LOADING OVERLAY */}
+      <Modal visible={loading} transparent animationType="fade">
+        <View style={styles.loadingOverlay}>
+          <BlurView
+            intensity={40}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={["rgba(5,15,50,0.88)", "rgba(10,25,80,0.95)"]}
+            style={StyleSheet.absoluteFill}
+          />
+          <Animated.View
+            style={[
+              styles.loadingLogoRing,
+              { transform: [{ scale: pulseAnim }] },
+            ]}
+          >
+            <Image
+              source={require("../../assets/logo.png")}
+              style={styles.loadingLogo}
+            />
+          </Animated.View>
+          <ActivityIndicator
+            size="large"
+            color="#f4b400"
+            style={{ marginTop: 32 }}
+          />
+          <Text style={styles.loadingText}>Creating account…</Text>
+          <Text style={styles.loadingSubText}>Please wait</Text>
+        </View>
+      </Modal>
+
+      {/* CUSTOM ALERT MODAL with centered icon */}
+      <Modal
+        visible={alertModalVisible}
+        transparent
+        animationType="none"
+        onRequestClose={() => setAlertModalVisible(false)}
+      >
+        <Animated.View style={[styles.modalOverlay, { opacity: modalOpacity }]}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            <Animated.View
+              style={[
+                styles.modalContent,
+                { transform: [{ scale: modalScale }] },
+              ]}
+            >
+              <LinearGradient
+                colors={["#fff", "#f9f9ff"]}
+                style={styles.modalGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                {/* Centered icon */}
+                <View style={styles.centeredIconWrapper}>
+                  <View style={styles.modalIconWrapper}>
+                    <Ionicons
+                      name={alertSuccess ? "checkmark-circle" : "alert-circle"}
+                      size={40}
+                      color={alertSuccess ? "#4caf50" : "#e24b4a"}
+                    />
+                  </View>
+                </View>
+
+                <Text
+                  style={[
+                    styles.modalTitle,
+                    {
+                      color: alertSuccess ? "#4caf50" : "#e24b4a",
+                      textAlign: "center",
+                    },
+                  ]}
+                >
+                  {alertTitle}
+                </Text>
+                <Text
+                  style={[styles.modalDescription, { textAlign: "center" }]}
+                >
+                  {alertMessage}
+                </Text>
+
+                <TouchableOpacity
+                  style={[
+                    styles.sendButton,
+                    { backgroundColor: alertSuccess ? "#4caf50" : "#e24b4a" },
+                  ]}
+                  onPress={() => {
+                    setAlertModalVisible(false);
+                    if (alertSuccess) {
+                      navigation.navigate("Login");
+                    }
+                  }}
+                >
+                  <Text style={styles.sendButtonText}>OK</Text>
+                </TouchableOpacity>
+              </LinearGradient>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </Animated.View>
+      </Modal>
+
+      {/* Course Modal */}
+      <Modal visible={courseModalVisible} transparent animationType="slide">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContentBottomSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Course</Text>
+              <TouchableOpacity onPress={() => setCourseModalVisible(false)}>
+                <Ionicons name="close" size={28} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={courses}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setFormData({ ...formData, course: item });
+                    setCourseModalVisible(false);
+                  }}
+                >
+                  <Text style={styles.modalItemText}>{item}</Text>
+                  {formData.course === item && (
+                    <Ionicons name="checkmark" size={24} color="#0f3c91" />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Year Level Modal */}
+      <Modal visible={yearModalVisible} transparent animationType="slide">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContentBottomSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Year Level</Text>
+              <TouchableOpacity onPress={() => setYearModalVisible(false)}>
+                <Ionicons name="close" size={28} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={yearLevels}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setFormData({ ...formData, year_level: item });
+                    setYearModalVisible(false);
+                  }}
+                >
+                  <Text style={styles.modalItemText}>{`Year ${item}`}</Text>
+                  {formData.year_level === item && (
+                    <Ionicons name="checkmark" size={24} color="#0f3c91" />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -649,7 +816,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
     fontSize: 15,
-    color: "#000", // Ensures text is black (fixes invisible dots)
+    color: "#000",
   },
   inputError: {
     borderWidth: 1,
@@ -712,7 +879,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.5)",
   },
-  modalContent: {
+  modalContentBottomSheet: {
     backgroundColor: "#fff",
     borderTopLeftRadius: 25,
     borderTopRightRadius: 25,
@@ -743,5 +910,120 @@ const styles = StyleSheet.create({
   modalItemText: {
     fontSize: 16,
     color: "#333",
+  },
+
+  // Loading overlay styles
+  loadingOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingLogoRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: "rgba(244,180,0,0.65)",
+    overflow: "hidden",
+    shadowColor: "#f4b400",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 22,
+    elevation: 14,
+  },
+  loadingLogo: {
+    width: "100%",
+    height: "100%",
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.3,
+  },
+  loadingSubText: {
+    marginTop: 5,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.4)",
+  },
+
+  // Custom alert modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 350,
+    borderRadius: 30,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 15 },
+    shadowOpacity: 0.25,
+    shadowRadius: 25,
+    elevation: 15,
+  },
+  modalGradient: { padding: 25, borderRadius: 30 },
+  modalIconWrapper: {
+    backgroundColor: "rgba(15, 60, 145, 0.1)",
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  closeButton: { padding: 5 },
+  modalDescription: {
+    fontSize: 14,
+    color: "#555",
+    lineHeight: 20,
+    marginBottom: 25,
+  },
+  sendButton: {
+    backgroundColor: "#0f3c91",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 12,
+    shadowColor: "#0f3c91",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  sendButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginLeft: 10,
+  },
+  modalTitle: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 12,
+    // textAlign: "center" (added inline)
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: "#555",
+    lineHeight: 20,
+    marginBottom: 25,
+    // textAlign: "center" (added inline)
+  },
+  centeredIconWrapper: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  absoluteCloseButton: {
+    position: "absolute",
+    top: 20,
+    right: 20,
+    zIndex: 10,
   },
 });

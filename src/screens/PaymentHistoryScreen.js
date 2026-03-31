@@ -1,13 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Asset } from "expo-asset";
+import { BlurView } from "expo-blur";
 import * as FileSystem from "expo-file-system/legacy";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   Image,
   Modal,
@@ -21,7 +23,74 @@ import {
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
 
-// ─── Receipt Modal ─────────────────────────────────────────────────────────────
+// ─── Loading Overlay (shared) ────────────────────────────────────────────────
+function LoadingOverlay({ visible }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.12,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      fadeAnim.setValue(0);
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <Animated.View style={[styles.loadingOverlay, { opacity: fadeAnim }]}>
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+        <LinearGradient
+          colors={["rgba(5,15,50,0.88)", "rgba(10,25,80,0.95)"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <Animated.View
+          style={[
+            styles.loadingLogoRing,
+            { transform: [{ scale: pulseAnim }] },
+          ]}
+        >
+          <Image
+            source={require("../../assets/logo.png")}
+            style={styles.loadingLogo}
+          />
+        </Animated.View>
+        <ActivityIndicator
+          size="large"
+          color="#f4b400"
+          style={{ marginTop: 32 }}
+        />
+        <Text style={styles.loadingText}>Loading payment history…</Text>
+        <Text style={styles.loadingSubText}>Please wait</Text>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+// ─── Receipt Modal (unchanged) ──────────────────────────────────────────────
 const ReceiptModal = ({ visible, onClose, receiptData }) => {
   const { colors } = useTheme();
   const [downloading, setDownloading] = useState(false);
@@ -536,16 +605,7 @@ export default function PaymentHistoryScreen({ navigation }) {
   );
 
   if (loading) {
-    return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: colors.background },
-        ]}
-      >
-        <ActivityIndicator size="large" color={colors.brand} />
-      </View>
-    );
+    return <LoadingOverlay visible={loading} />;
   }
 
   return (
@@ -858,4 +918,40 @@ const styles = StyleSheet.create({
   viewReceiptText: { fontWeight: "700", marginLeft: 8, fontSize: 15 },
   emptyContainer: { alignItems: "center", marginTop: 100 },
   emptyText: { fontSize: 18, marginTop: 20 },
+
+  // Loading overlay styles
+  loadingOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingLogoRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: "rgba(244,180,0,0.65)",
+    overflow: "hidden",
+    shadowColor: "#f4b400",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 22,
+    elevation: 14,
+  },
+  loadingLogo: {
+    width: "100%",
+    height: "100%",
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.3,
+  },
+  loadingSubText: {
+    marginTop: 5,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.4)",
+  },
 });
