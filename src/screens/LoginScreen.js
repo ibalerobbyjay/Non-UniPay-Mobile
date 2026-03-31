@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Image,
   ImageBackground,
@@ -53,10 +54,10 @@ export default function LoginScreen({ navigation }) {
   const [resetLoading, setResetLoading] = useState(false);
   const modalAnim = useRef(new Animated.Value(0)).current;
 
-  // ─── Toast state ───────────────────────────────────────────────────────
+  // Toast state
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("error"); // 'error' or 'info'
+  const [toastType, setToastType] = useState("error");
   const toastTimeout = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -126,9 +127,8 @@ export default function LoginScreen({ navigation }) {
     }
   }, [forgotPasswordVisible]);
 
-  // ─── Toast helper ──────────────────────────────────────────────────────
+  // Toast helper
   const showToast = (message, type = "error") => {
-    // Clear any existing timeout
     if (toastTimeout.current) clearTimeout(toastTimeout.current);
 
     setToastMessage(message);
@@ -140,7 +140,6 @@ export default function LoginScreen({ navigation }) {
       useNativeDriver: true,
     }).start();
 
-    // Auto-hide after 5 seconds
     toastTimeout.current = setTimeout(() => {
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -158,7 +157,7 @@ export default function LoginScreen({ navigation }) {
 
   const isLocked = !!lockoutEnd;
 
-  // ─── Login with escalating lockout ────────────────────────────────────
+  // Login logic
   const handleLogin = async () => {
     if (isLocked) return;
     if (!isFormValid()) {
@@ -171,7 +170,6 @@ export default function LoginScreen({ navigation }) {
       const result = await login(email, password);
 
       if (!result.success) {
-        // Hide loading before showing toast
         setLoading(false);
 
         const newAttempts = failedAttempts + 1;
@@ -197,7 +195,6 @@ export default function LoginScreen({ navigation }) {
           );
         }
       } else {
-        // Success – reset lockout state
         setFailedAttempts(0);
         setLockoutEnd(null);
         setLockoutSeconds(0);
@@ -220,12 +217,11 @@ export default function LoginScreen({ navigation }) {
       console.error("Login error:", error);
       showToast("Something went wrong. Please try again.");
     } finally {
-      // Safety: if still loading (e.g., success case we don't set loading false here)
       if (loading) setLoading(false);
     }
   };
 
-  // ─── Forgot Password (unchanged, still uses Alert for simplicity) ─────
+  // Forgot password handler
   const handleForgotPassword = async () => {
     if (!resetEmail) {
       Alert.alert("Error", "Please enter your email address");
@@ -462,7 +458,7 @@ export default function LoginScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* FULL‑SCREEN LOADING OVERLAY (unchanged) */}
+      {/* FULL‑SCREEN LOADING OVERLAY (fixed ring size) */}
       <Modal visible={loading} transparent animationType="fade">
         <View style={styles.loadingOverlay}>
           <BlurView
@@ -483,6 +479,7 @@ export default function LoginScreen({ navigation }) {
             <Image
               source={require("../../assets/logo.png")}
               style={styles.loadingLogo}
+              resizeMode="contain"
             />
           </Animated.View>
           <ActivityIndicator
@@ -495,7 +492,7 @@ export default function LoginScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* FORGOT PASSWORD MODAL (unchanged) */}
+      {/* FORGOT PASSWORD MODAL */}
       <Modal
         visible={forgotPasswordVisible}
         transparent
@@ -585,7 +582,7 @@ export default function LoginScreen({ navigation }) {
         </Animated.View>
       </Modal>
 
-      {/* ─── TOAST NOTIFICATION (top, auto‑dismiss after 5s) ──────────────── */}
+      {/* TOAST NOTIFICATION */}
       {toastVisible && (
         <Animated.View
           style={[
@@ -780,19 +777,22 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Full‑screen loading overlay
+  // Full‑screen loading overlay (fixed ring)
   loadingOverlay: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
   loadingLogoRing: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
     borderWidth: 3,
     borderColor: "rgba(244,180,0,0.65)",
     overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "transparent",
     shadowColor: "#f4b400",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.55,
@@ -903,7 +903,7 @@ const styles = StyleSheet.create({
   cancelButton: { padding: 12, alignItems: "center" },
   cancelButtonText: { color: "#999", fontSize: 15, fontWeight: "600" },
 
-  // ─── Toast styles ──────────────────────────────────────────────────────
+  // Toast
   toastContainer: {
     position: "absolute",
     top: Platform.OS === "ios" ? 50 : 30,

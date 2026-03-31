@@ -8,6 +8,7 @@ import {
   Alert,
   Animated,
   Image,
+  Linking,
   Modal,
   RefreshControl,
   ScrollView,

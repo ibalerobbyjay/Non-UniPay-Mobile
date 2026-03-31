@@ -42,8 +42,6 @@ function SplashScreen() {
     useRef(new Animated.Value(0.2)).current,
     useRef(new Animated.Value(0.2)).current,
   ];
-  const ringScale = useRef(new Animated.Value(0.8)).current;
-  const ringOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Logo entrance
@@ -60,19 +58,6 @@ function SplashScreen() {
         duration: 400,
         useNativeDriver: true,
         delay: 100,
-      }),
-      Animated.timing(ringOpacity, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-        delay: 300,
-      }),
-      Animated.spring(ringScale, {
-        toValue: 1,
-        tension: 40,
-        friction: 8,
-        useNativeDriver: true,
-        delay: 300,
       }),
       Animated.timing(titleOpacity, {
         toValue: 1,
@@ -120,14 +105,6 @@ function SplashScreen() {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Outer decorative ring */}
-      <Animated.View
-        style={[
-          splash.outerRing,
-          { transform: [{ scale: ringScale }], opacity: ringOpacity },
-        ]}
-      />
-
       {/* Logo */}
       <Animated.View
         style={[
@@ -135,10 +112,6 @@ function SplashScreen() {
           { transform: [{ scale: logoScale }], opacity: logoOpacity },
         ]}
       >
-        <LinearGradient
-          colors={["rgba(244,180,0,0.25)", "rgba(244,180,0,0.05)"]}
-          style={splash.logoGlow}
-        />
         <Image
           source={require("../../assets/logo.png")}
           style={splash.logo}
@@ -515,30 +488,20 @@ const splash = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  outerRing: {
-    position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    borderWidth: 1.5,
-    borderColor: "rgba(244,180,0,0.2)",
-  },
   logoWrap: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 2.5,
-    borderColor: "rgba(244,180,0,0.55)",
+    width: 130, // matches static logo size
+    height: 130,
+    borderRadius: 65,
+    borderWidth: 4, // white border like the login screen
+    borderColor: "#f4b400",
     overflow: "hidden",
-    shadowColor: "#f4b400",
+    backgroundColor: "transparent",
+    // remove shadow and glow
+    shadowColor: "transparent",
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 16,
-  },
-  logoGlow: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   logo: {
     width: "100%",
