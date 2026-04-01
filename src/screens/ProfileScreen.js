@@ -22,7 +22,7 @@ import {
 } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
-import api from "../services/api";
+import api, { getImageUrl } from "../services/api"; // ← getImageUrl imported from api.js
 
 const COURSES = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
 const YEAR_LEVELS = ["1", "2", "3", "4"];
@@ -241,7 +241,7 @@ function LegalModal({ visible, onClose, title, sections }) {
   );
 }
 
-// ─── Logout Confirmation Modal ────────────────────────────────────────────────
+// ─── Logout Confirmation Modal ───────────────────────────────────────────────
 function LogoutModal({ visible, onConfirm, onCancel, colors }) {
   return (
     <Modal
@@ -307,7 +307,7 @@ function LogoutModal({ visible, onConfirm, onCancel, colors }) {
   );
 }
 
-// ─── Logout Loading Overlay ───────────────────────────────────────────────────
+// ─── Logout Loading Overlay ──────────────────────────────────────────────────
 function LogoutLoadingOverlay({ visible }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -375,7 +375,7 @@ function LogoutLoadingOverlay({ visible }) {
   );
 }
 
-// ─── Profile Loading Overlay (similar to other screens) ──────────────────────
+// ─── Profile Loading Overlay ─────────────────────────────────────────────────
 function ProfileLoadingOverlay({ visible }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -466,7 +466,7 @@ export default function ProfileScreen({ navigation }) {
   const [nextAllowed, setNextAllowed] = useState(null);
   const [pictureCooldown, setPictureCooldown] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true); // NEW: for initial profile load
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // Security
   const [changingPassword, setChangingPassword] = useState(false);
@@ -521,16 +521,22 @@ export default function ProfileScreen({ navigation }) {
   const loadProfile = async () => {
     try {
       const response = await api.get("/student/profile");
-      setProfile(response.data);
+      const data = response.data;
+
+      // ── DEBUG: log the raw picture URL so you can verify it in Metro ──
+      console.log("[Profile] raw profile_picture:", data.profile_picture);
+      console.log("[Profile] resolved URL:", getImageUrl(data.profile_picture));
+
+      setProfile(data);
       setFormData({
-        contact: response.data.contact || "",
-        course: response.data.course || "",
-        year_level: response.data.year_level?.toString() || "",
-        email: response.data.user?.email || user?.email || "",
+        contact: data.contact || "",
+        course: data.course || "",
+        year_level: data.year_level?.toString() || "",
+        email: data.user?.email || user?.email || "",
       });
 
-      if (response.data.last_profile_update) {
-        const last = new Date(response.data.last_profile_update);
+      if (data.last_profile_update) {
+        const last = new Date(data.last_profile_update);
         const next = new Date(last);
         next.setDate(next.getDate() + 3);
         const now = new Date();
@@ -546,8 +552,8 @@ export default function ProfileScreen({ navigation }) {
         }
       }
 
-      if (response.data.last_picture_update) {
-        const last = new Date(response.data.last_picture_update);
+      if (data.last_picture_update) {
+        const last = new Date(data.last_picture_update);
         const next = new Date(last);
         next.setDate(next.getDate() + 7);
         const now = new Date();
@@ -602,7 +608,7 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // ─── Image picker functions ───────────────────────────────────────────────
+  // ─── Image picker functions ──────────────────────────────────────────────
   const pickImage = () => {
     if (pictureCooldown) {
       showAlert("Locked", pictureCooldown);
@@ -765,7 +771,9 @@ export default function ProfileScreen({ navigation }) {
   const strength = getPasswordStrength(passwordForm.new_password);
   const s = makeStyles(colors);
 
-  // Show loading overlay while initial profile is loading
+  // ── Resolved avatar URI (run through getImageUrl every render) ──────────
+  const avatarUri = getImageUrl(profile?.profile_picture);
+
   if (initialLoading) {
     return <ProfileLoadingOverlay visible={initialLoading} />;
   }
@@ -795,15 +803,23 @@ export default function ProfileScreen({ navigation }) {
               style={styles.avatarContainer}
               disabled={uploading}
             >
-              {profile?.profile_picture ? (
+              {/* ── Profile picture with getImageUrl fix ── */}
+              {avatarUri ? (
                 <Image
                   source={{
-                    uri: profile.profile_picture,
+                    uri: avatarUri,
                     headers: {
                       "ngrok-skip-browser-warning": "true",
                     },
                   }}
                   style={styles.avatar}
+                  onError={(e) =>
+                    console.warn(
+                      "[Profile] Image failed to load:",
+                      avatarUri,
+                      e.nativeEvent.error,
+                    )
+                  }
                 />
               ) : (
                 <Ionicons name="person-circle" size={100} color="#fff" />
@@ -1791,7 +1807,6 @@ const logoutLoadingStyles = StyleSheet.create({
   },
 });
 
-// ─── Profile Loading Overlay Styles ──────────────────────────────────────────
 const profileLoadingStyles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -1829,7 +1844,6 @@ const profileLoadingStyles = StyleSheet.create({
   },
 });
 
-// ─── Static Styles ────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerGradient: {

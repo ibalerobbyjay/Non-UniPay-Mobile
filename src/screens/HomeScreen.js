@@ -16,7 +16,7 @@ import {
 import OnboardingGuide from "../components/OnboardingGuide";
 import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
-import api from "../services/api";
+import api, { getImageUrl } from "../services/api"; // <-- UPDATED: import getImageUrl
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 40;
@@ -450,6 +450,9 @@ export default function HomeScreen({ navigation }) {
     },
   ];
 
+  // ── Compute avatar URL once ─────────────────────────────────────────────
+  const avatarUri = getImageUrl(profile?.profile_picture);
+
   // ── Render ────────────────────────────────────────────────────────────
   return (
     <>
@@ -567,8 +570,15 @@ export default function HomeScreen({ navigation }) {
                 >
                   {profile?.profile_picture ? (
                     <Image
-                      source={{ uri: profile.profile_picture }}
+                      source={{ uri: avatarUri }}
                       style={styles.profileImage}
+                      onError={(e) =>
+                        console.warn(
+                          "Failed to load avatar:",
+                          avatarUri,
+                          e.nativeEvent.error,
+                        )
+                      }
                     />
                   ) : (
                     <Ionicons
