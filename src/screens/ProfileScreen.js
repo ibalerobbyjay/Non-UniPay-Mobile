@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 import { useFocusEffect } from "@react-navigation/native";
+import { BlurView } from "expo-blur";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
@@ -22,7 +23,7 @@ import {
 } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
-import api, { getImageUrl } from "../services/api"; // ← getImageUrl imported from api.js
+import api, { getImageUrl } from "../services/api";
 
 const COURSES = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
 const YEAR_LEVELS = ["1", "2", "3", "4"];
@@ -467,6 +468,7 @@ export default function ProfileScreen({ navigation }) {
   const [pictureCooldown, setPictureCooldown] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [showQrModal, setShowQrModal] = useState(false); // new state for QR modal
 
   // Security
   const [changingPassword, setChangingPassword] = useState(false);
@@ -522,11 +524,6 @@ export default function ProfileScreen({ navigation }) {
     try {
       const response = await api.get("/student/profile");
       const data = response.data;
-
-      // ── DEBUG: log the raw picture URL so you can verify it in Metro ──
-      console.log("[Profile] raw profile_picture:", data.profile_picture);
-      console.log("[Profile] resolved URL:", getImageUrl(data.profile_picture));
-
       setProfile(data);
       setFormData({
         contact: data.contact || "",
@@ -771,7 +768,6 @@ export default function ProfileScreen({ navigation }) {
   const strength = getPasswordStrength(passwordForm.new_password);
   const s = makeStyles(colors);
 
-  // ── Resolved avatar URI (run through getImageUrl every render) ──────────
   const avatarUri = getImageUrl(profile?.profile_picture);
 
   if (initialLoading) {
@@ -790,35 +786,48 @@ export default function ProfileScreen({ navigation }) {
           />
         }
       >
-        {/* ── Header ── */}
+        {/* ── Enhanced Header ── */}
         <LinearGradient
           colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
         >
+          {/* Top row with icons */}
+          <View style={styles.headerTopRow}>
+            <View style={{ width: 40 }} />
+            <View style={styles.headerIcons}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (profile?.student_no) {
+                    setShowQrModal(true);
+                  } else {
+                    showAlert("No ID", "Student number not available.");
+                  }
+                }}
+                style={styles.headerIconBtn}
+              >
+                <Ionicons name="id-card-outline" size={22} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Avatar & name */}
           <View style={styles.avatarSection}>
             <TouchableOpacity
               onPress={pickImage}
               style={styles.avatarContainer}
               disabled={uploading}
             >
-              {/* ── Profile picture with getImageUrl fix ── */}
               {avatarUri ? (
                 <Image
                   source={{
                     uri: avatarUri,
-                    headers: {
-                      "ngrok-skip-browser-warning": "true",
-                    },
+                    headers: { "ngrok-skip-browser-warning": "true" },
                   }}
                   style={styles.avatar}
                   onError={(e) =>
-                    console.warn(
-                      "[Profile] Image failed to load:",
-                      avatarUri,
-                      e.nativeEvent.error,
-                    )
+                    console.warn("[Profile] Image failed to load:", avatarUri)
                   }
                 />
               ) : (
@@ -846,6 +855,15 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.headerEmail}>
               {formData.email || user?.email}
             </Text>
+
+            {/* Student number badge */}
+            {profile?.student_no && (
+              <View style={styles.studentIdBadge}>
+                <Ionicons name="card-outline" size={14} color="#fff" />
+                <Text style={styles.studentIdText}>{profile.student_no}</Text>
+              </View>
+            )}
+
             {pictureCooldown && (
               <Text style={styles.pictureCooldownText}>{pictureCooldown}</Text>
             )}
@@ -853,7 +871,7 @@ export default function ProfileScreen({ navigation }) {
         </LinearGradient>
 
         <View style={styles.content}>
-          {/* ── Student Information ── */}
+          {/* Student Information section (unchanged) */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <Text style={s.sectionTitle}>Student Information</Text>
@@ -888,7 +906,6 @@ export default function ProfileScreen({ navigation }) {
 
             {editing ? (
               <View>
-                {/* Email */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Email</Text>
                   <TextInput
@@ -902,7 +919,6 @@ export default function ProfileScreen({ navigation }) {
                   />
                 </View>
 
-                {/* Contact */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Contact Number</Text>
                   <TextInput
@@ -917,7 +933,6 @@ export default function ProfileScreen({ navigation }) {
                   />
                 </View>
 
-                {/* Course Picker */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Course</Text>
                   <View
@@ -963,7 +978,6 @@ export default function ProfileScreen({ navigation }) {
                   </View>
                 </View>
 
-                {/* Year Level Picker */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Year Level</Text>
                   <View
@@ -1053,7 +1067,7 @@ export default function ProfileScreen({ navigation }) {
             )}
           </View>
 
-          {/* ── Account Security ── */}
+          {/* Account Security section (unchanged) */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <View style={styles.sectionTitleRow}>
@@ -1265,7 +1279,7 @@ export default function ProfileScreen({ navigation }) {
             )}
           </View>
 
-          {/* ── Appearance ── */}
+          {/* Appearance section (unchanged) */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <View style={styles.sectionTitleRow}>
@@ -1309,7 +1323,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
 
-          {/* ── Support & Legal ── */}
+          {/* Support & Legal section (unchanged) */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <View style={styles.sectionTitleRow}>
@@ -1390,7 +1404,7 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* ── Logout ── */}
+          {/* Logout button (unchanged) */}
           <TouchableOpacity style={s.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color="#f44336" />
             <Text style={styles.logoutText}>Logout</Text>
@@ -1402,7 +1416,7 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* Legal Modals */}
+      {/* Legal Modals (unchanged) */}
       <LegalModal
         visible={showPrivacy}
         onClose={() => setShowPrivacy(false)}
@@ -1416,7 +1430,7 @@ export default function ProfileScreen({ navigation }) {
         sections={TERMS_CONTENT}
       />
 
-      {/* Logout Confirmation Modal */}
+      {/* Logout Confirmation Modal (unchanged) */}
       <LogoutModal
         visible={showLogoutModal}
         onConfirm={confirmLogout}
@@ -1424,10 +1438,10 @@ export default function ProfileScreen({ navigation }) {
         colors={colors}
       />
 
-      {/* Logout Loading Overlay */}
+      {/* Logout Loading Overlay (unchanged) */}
       <LogoutLoadingOverlay visible={loggingOut} />
 
-      {/* Alert Modal */}
+      {/* Alert Modal (unchanged) */}
       <AlertModal
         visible={alertModal.visible}
         title={alertModal.title}
@@ -1436,7 +1450,7 @@ export default function ProfileScreen({ navigation }) {
         onClose={closeAlert}
       />
 
-      {/* Image Picker Modal */}
+      {/* Image Picker Modal (unchanged) */}
       <Modal
         visible={showImagePickerModal}
         transparent
@@ -1488,6 +1502,86 @@ export default function ProfileScreen({ navigation }) {
               <Text style={{ color: colors.textMuted, fontWeight: "500" }}>
                 Cancel
               </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* QR Code Modal with Blur and Student Name */}
+      <Modal
+        visible={showQrModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowQrModal(false)}
+      >
+        <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={alertModalStyles.overlay}>
+          <View
+            style={[alertModalStyles.card, { backgroundColor: colors.surface }]}
+          >
+            <Ionicons name="id-card-outline" size={64} color={colors.brand} />
+            <Text
+              style={[alertModalStyles.title, { color: colors.textPrimary }]}
+            >
+              Student ID Card
+            </Text>
+
+            {/* Student Name */}
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "600",
+                color: colors.textPrimary,
+                marginTop: 8,
+              }}
+            >
+              {user?.name}
+            </Text>
+
+            {/* Student Number */}
+            <Text
+              style={[
+                alertModalStyles.message,
+                { color: colors.textSecondary, marginBottom: 4 },
+              ]}
+            >
+              {profile?.student_no || "Not available"}
+            </Text>
+
+            {/* Course */}
+            {profile?.course && (
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "500",
+                  color: colors.textPrimary,
+                  marginTop: 0,
+                  marginBottom: 8,
+                }}
+              >
+                {profile.course}
+              </Text>
+            )}
+
+            <Text
+              style={{
+                fontSize: 12,
+                color: colors.textMuted,
+                textAlign: "center",
+                marginBottom: 16,
+              }}
+            >
+              Show this ID number to the cashier or authorized personnel.
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                alertModalStyles.button,
+                { backgroundColor: colors.brand },
+              ]}
+              onPress={() => setShowQrModal(false)}
+            >
+              <Text style={alertModalStyles.buttonText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1630,7 +1724,7 @@ function makeStyles(colors) {
   });
 }
 
-// ─── Modal Styles ─────────────────────────────────────────────────────────────
+// ─── Modal Styles (unchanged) ────────────────────────────────────────────────
 const alertModalStyles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -1847,7 +1941,7 @@ const profileLoadingStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerGradient: {
-    paddingTop: 60,
+    paddingTop: 20, // reduced to fit top row
     paddingBottom: 30,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
@@ -1856,6 +1950,26 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  headerIcons: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  headerIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    transform: [{ translateY: 20 }], // adjust value as needed (e.g., 8 or 10)
   },
   avatarSection: { alignItems: "center" },
   avatarContainer: { marginBottom: 15, position: "relative" },
@@ -1894,6 +2008,21 @@ const styles = StyleSheet.create({
   },
   name: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 4 },
   headerEmail: { fontSize: 16, color: "rgba(255,255,255,0.9)" },
+  studentIdBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.3)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginTop: 8,
+    gap: 6,
+  },
+  studentIdText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#fff",
+  },
   pictureCooldownText: {
     fontSize: 12,
     color: "rgba(255,255,255,0.6)",

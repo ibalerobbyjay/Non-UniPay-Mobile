@@ -6,19 +6,21 @@ import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  Image, // <-- added
-  Modal, // <-- added
+  Image,
+  Modal,
   RefreshControl,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
 
-export default function ClearanceScreen({ navigation }) {
+export default function ClearanceScreen({ navigation, setScreenshotMode }) {
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
@@ -31,6 +33,9 @@ export default function ClearanceScreen({ navigation }) {
   const [examPeriodData, setExamPeriodData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [screenshotMode, setLocalScreenshotMode] = useState(false);
+  const [showExitHint, setShowExitHint] = useState(false);
+  const lastTapRef = useRef(0);
 
   // Pulse animation for loading overlay
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -85,7 +90,28 @@ export default function ClearanceScreen({ navigation }) {
     setRefreshing(false);
   };
 
-  // ─── Full‑screen loading overlay ────────────────────────────────────────
+  const enableScreenshotMode = () => {
+    setLocalScreenshotMode(true);
+    setScreenshotMode(true);
+    StatusBar.setHidden(true);
+    setShowExitHint(true);
+    setTimeout(() => setShowExitHint(false), 3000);
+  };
+
+  const disableScreenshotMode = () => {
+    setLocalScreenshotMode(false);
+    setScreenshotMode(false);
+    StatusBar.setHidden(false);
+  };
+
+  const handleDoubleTap = () => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      disableScreenshotMode();
+    }
+    lastTapRef.current = now;
+  };
+
   if (loading) {
     return (
       <Modal visible={loading} transparent animationType="fade">
@@ -156,7 +182,6 @@ export default function ClearanceScreen({ navigation }) {
     statusMessage = "Please settle your fees to get clearance";
   }
 
-  // Prefer data from the exam period API; fall back to first fee's fields
   const firstFee =
     breakdown?.tuition?.fees?.[0] ||
     breakdown?.miscellaneous?.fees?.[0] ||
@@ -183,7 +208,6 @@ export default function ClearanceScreen({ navigation }) {
       : []),
   ];
 
-  // Exam period accent color for the header pill
   const epColor = currentExamPeriod
     ? currentExamPeriod.toLowerCase().includes("prelim")
       ? "#818cf8"
@@ -196,27 +220,47 @@ export default function ClearanceScreen({ navigation }) {
             : "rgba(255,255,255,0.7)"
     : null;
 
-  return (
+  // Determine ScrollView behavior based on screenshot mode
+  const scrollViewProps = !screenshotMode
+    ? {
+        refreshControl: (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brand}
+          />
+        ),
+      }
+    : {
+        scrollEnabled: false, // disable scrolling for clean screenshot
+        contentContainerStyle: styles.screenshotContentContainer, // full height + center
+      };
+
+  const content = (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={colors.brand}
-        />
-      }
+      {...scrollViewProps}
     >
-      {/* ── Gradient Header ── */}
+      {/* Gradient Header with Screenshot Button */}
       <LinearGradient
         colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
       >
-        <Text style={styles.headerTitle}>Exam Clearance</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Exam Clearance</Text>
+          {!screenshotMode && (
+            <TouchableOpacity
+              style={styles.screenshotHeaderButton}
+              onPress={enableScreenshotMode}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="camera-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+          )}
+        </View>
 
-        {/* Exam period pill in header */}
         <View style={styles.headerMeta}>
           {currentExamPeriod ? (
             <View
@@ -261,7 +305,7 @@ export default function ClearanceScreen({ navigation }) {
         </View>
       </LinearGradient>
 
-      {/* ── Status Card ── */}
+      {/* Status Card */}
       <View
         style={[
           styles.statusCard,
@@ -286,7 +330,7 @@ export default function ClearanceScreen({ navigation }) {
         </Text>
       </View>
 
-      {/* ── Clearance Details Card ── */}
+      {/* Clearance Details Card */}
       <View
         style={[
           styles.detailsCard,
@@ -329,7 +373,7 @@ export default function ClearanceScreen({ navigation }) {
         ))}
       </View>
 
-      {/* ── Note Card: Pending ── */}
+      {/* Note Cards (pending, cleared, no fees) – same as before */}
       {hasFees && !isCleared && (
         <View
           style={[
@@ -382,7 +426,6 @@ export default function ClearanceScreen({ navigation }) {
         </View>
       )}
 
-      {/* ── Note Card: Cleared ── */}
       {hasFees && isCleared && (
         <View
           style={[
@@ -428,7 +471,6 @@ export default function ClearanceScreen({ navigation }) {
         </View>
       )}
 
-      {/* ── Note Card: No Fees ── */}
       {!hasFees && (
         <View
           style={[
@@ -461,16 +503,36 @@ export default function ClearanceScreen({ navigation }) {
         </View>
       )}
 
-      <View style={{ height: 30 }} />
+      <View style={{ height: screenshotMode ? 0 : 30 }} />
     </ScrollView>
+  );
+
+  return (
+    <View style={{ flex: 1 }}>
+      {screenshotMode ? (
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ flex: 1 }}
+          onPress={handleDoubleTap}
+        >
+          {content}
+          {showExitHint && (
+            <View style={styles.exitHintContainer}>
+              <Text style={styles.exitHintText}>
+                Double‑tap anywhere to exit
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      ) : (
+        content
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" }, // kept for reference, not used
-
-  // ─── Full‑screen loading overlay styles ────────────────────────────────
   loadingOverlay: {
     flex: 1,
     justifyContent: "center",
@@ -505,10 +567,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "rgba(255,255,255,0.4)",
   },
-
-  // Header
   headerGradient: {
-    paddingTop: 60,
+    paddingTop: 40,
     paddingBottom: 30,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 30,
@@ -519,11 +579,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: "bold",
     color: "#fff",
-    marginBottom: 8,
+  },
+  screenshotHeaderButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 30,
+    gap: 6,
+  },
+  screenshotHeaderText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
   headerMeta: {
     flexDirection: "row",
@@ -555,8 +634,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.1)",
   },
   epPillNoneText: { fontSize: 12, color: "rgba(255,255,255,0.5)" },
-
-  // Status Card
   statusCard: {
     marginTop: -20,
     marginHorizontal: 20,
@@ -586,8 +663,6 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 28, fontWeight: "bold", marginBottom: 8 },
   statusMessage: { fontSize: 16, textAlign: "center", lineHeight: 22 },
-
-  // Details Card
   detailsCard: {
     marginHorizontal: 20,
     marginTop: 20,
@@ -616,31 +691,6 @@ const styles = StyleSheet.create({
   detailTextContainer: { flex: 1, marginLeft: 12 },
   detailLabel: { fontSize: 14, marginBottom: 2 },
   detailValue: { fontSize: 16, fontWeight: "600" },
-
-  // Balance Card
-  balanceCard: {
-    marginHorizontal: 20,
-    marginTop: 16,
-    padding: 18,
-    borderRadius: 18,
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  balanceRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 5,
-  },
-  balanceDivider: { borderTopWidth: 1, marginVertical: 8 },
-  balanceLabel: { fontSize: 14 },
-  balanceValue: { fontSize: 16, fontWeight: "700" },
-
-  // Note Cards
   noteCard: {
     marginHorizontal: 20,
     marginTop: 16,
@@ -679,4 +729,22 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   notePillText: { fontSize: 12, fontWeight: "600" },
+  exitHintContainer: {
+    position: "absolute",
+    bottom: 40,
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.7)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 30,
+  },
+  exitHintText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  screenshotContentContainer: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
 });

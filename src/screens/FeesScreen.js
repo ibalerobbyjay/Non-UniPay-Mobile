@@ -12,6 +12,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
@@ -159,6 +160,10 @@ export default function FeesScreen({ navigation }) {
             : "rgba(255,255,255,0.7)"
     : "rgba(255,255,255,0.5)";
 
+  const handlePayPress = () => {
+    navigation.navigate("Payment");
+  };
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -170,14 +175,26 @@ export default function FeesScreen({ navigation }) {
         />
       }
     >
-      {/* ── Header ── */}
+      {/* ── Header with Pay Button ── */}
       <LinearGradient
         colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
       >
-        <Text style={styles.headerTitle}>School Fees</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>School Fees</Text>
+          {hasFees && (
+            <TouchableOpacity
+              style={styles.payButton}
+              onPress={handlePayPress}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="card-outline" size={20} color="#fff" />
+              <Text style={styles.payButtonText}>Pay</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Exam period + semester context */}
         <View style={styles.headerMeta}>
@@ -437,7 +454,6 @@ function FeeSection({
             <Text style={[styles.feeName, { color: colors.textSecondary }]}>
               {fee.name}
             </Text>
-            {/* Show exam period tag if fee is pinned to a specific period */}
             {fee.exam_period && (
               <View style={styles.feePeriodTag}>
                 <Ionicons name="time-outline" size={10} color="#c2410c" />
@@ -467,7 +483,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" }, // kept for reference, not used
 
-  // Full-screen loading overlay (copied from LoginScreen)
+  // Full-screen loading overlay
   loadingOverlay: {
     flex: 1,
     justifyContent: "center",
@@ -516,11 +532,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: "bold",
     color: "#fff",
-    marginBottom: 6,
+  },
+  payButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 30,
+    gap: 6,
+  },
+  payButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
   headerMeta: {
     flexDirection: "row",

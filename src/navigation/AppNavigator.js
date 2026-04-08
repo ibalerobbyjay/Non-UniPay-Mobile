@@ -44,7 +44,6 @@ function SplashScreen() {
   ];
 
   useEffect(() => {
-    // Logo entrance
     Animated.parallel([
       Animated.spring(logoScale, {
         toValue: 1,
@@ -74,7 +73,6 @@ function SplashScreen() {
       }),
     ]).start();
 
-    // Staggered dot pulse loop
     const animateDots = () => {
       const seq = dotOpacity.map((dot, i) =>
         Animated.sequence([
@@ -104,8 +102,6 @@ function SplashScreen() {
         locations={[0, 0.5, 1]}
         style={StyleSheet.absoluteFill}
       />
-
-      {/* Logo */}
       <Animated.View
         style={[
           splash.logoWrap,
@@ -118,8 +114,6 @@ function SplashScreen() {
           resizeMode="cover"
         />
       </Animated.View>
-
-      {/* App name + tagline */}
       <Animated.View
         style={[
           splash.textBlock,
@@ -131,8 +125,6 @@ function SplashScreen() {
           School Fee Payment & Exam Clearance
         </Animated.Text>
       </Animated.View>
-
-      {/* Loading dots */}
       <View style={splash.dotsRow}>
         {dotOpacity.map((anim, i) => (
           <Animated.View key={i} style={[splash.dot, { opacity: anim }]} />
@@ -143,7 +135,7 @@ function SplashScreen() {
 }
 
 /* ─────────────────────────────────────────────
-   Animated UniBot Button (UNCHANGED)
+   Animated UniBot Button
 ───────────────────────────────────────────── */
 function UniBotTabButton({ onPress, accessibilityState }) {
   const { colors } = useTheme();
@@ -260,7 +252,7 @@ function UniBotTabButton({ onPress, accessibilityState }) {
 /* ─────────────────────────────────────────────
    Tab Navigator
 ───────────────────────────────────────────── */
-function TabNavigator() {
+function TabNavigator({ screenshotMode, setScreenshotMode }) {
   const { colors, isDark } = useTheme();
 
   return (
@@ -288,17 +280,20 @@ function TabNavigator() {
         },
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          elevation: 8,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: isDark ? 0.3 : 0.06,
-          shadowRadius: 8,
-          height: 62,
-        },
+        // ← Key change: hide tab bar when screenshotMode is on
+        tabBarStyle: screenshotMode
+          ? { display: "none" }
+          : {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+              borderTopWidth: 1,
+              elevation: 8,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: -2 },
+              shadowOpacity: isDark ? 0.3 : 0.06,
+              shadowRadius: 8,
+              height: 62,
+            },
         tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
         headerShown: false,
       })}
@@ -319,7 +314,12 @@ function TabNavigator() {
           tabBarButton: (props) => <UniBotTabButton {...props} />,
         }}
       />
-      <Tab.Screen name="Clearance" component={ClearanceScreen} />
+      <Tab.Screen name="Clearance">
+        {/* Use render prop to inject setScreenshotMode into ClearanceScreen */}
+        {(props) => (
+          <ClearanceScreen {...props} setScreenshotMode={setScreenshotMode} />
+        )}
+      </Tab.Screen>
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -332,13 +332,14 @@ export default function AppNavigator() {
   const { user, loading } = useContext(AuthContext);
   const { colors } = useTheme();
 
-  // Splash fade-out
+  // ← Shared screenshot mode state lifted up here
+  const [screenshotMode, setScreenshotMode] = useState(false);
+
   const splashOpacity = useRef(new Animated.Value(1)).current;
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     if (!loading) {
-      // Give splash a beat to breathe, then fade it out
       setTimeout(() => {
         Animated.timing(splashOpacity, {
           toValue: 0,
@@ -368,8 +369,6 @@ export default function AppNavigator() {
         cardStyle: { backgroundColor: colors.background },
         gestureEnabled: true,
         gestureDirection: "horizontal",
-
-        // Smooth fade+slide transition
         transitionSpec: {
           open: {
             animation: "spring",
@@ -413,11 +412,15 @@ export default function AppNavigator() {
     >
       {user ? (
         <>
-          <Stack.Screen
-            name="MainTabs"
-            component={TabNavigator}
-            options={{ headerShown: false }}
-          />
+          <Stack.Screen name="MainTabs" options={{ headerShown: false }}>
+            {/* Pass screenshotMode + setter down into TabNavigator */}
+            {() => (
+              <TabNavigator
+                screenshotMode={screenshotMode}
+                setScreenshotMode={setScreenshotMode}
+              />
+            )}
+          </Stack.Screen>
           <Stack.Screen
             name="Payment"
             component={PaymentScreen}
@@ -489,14 +492,13 @@ const splash = StyleSheet.create({
     justifyContent: "center",
   },
   logoWrap: {
-    width: 130, // matches static logo size
+    width: 130,
     height: 130,
     borderRadius: 65,
-    borderWidth: 4, // white border like the login screen
+    borderWidth: 4,
     borderColor: "#f4b400",
     overflow: "hidden",
     backgroundColor: "transparent",
-    // remove shadow and glow
     shadowColor: "transparent",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,
