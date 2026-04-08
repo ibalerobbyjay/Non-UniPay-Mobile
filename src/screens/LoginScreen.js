@@ -85,6 +85,43 @@ export default function LoginScreen({ navigation }) {
     }
   }, [loading]);
 
+  // ========== LIGHT BEAMS ANIMATION ==========
+  const beamTranslateX1 = useRef(new Animated.Value(-300)).current;
+  const beamTranslateX2 = useRef(new Animated.Value(-500)).current;
+  const beamTranslateX3 = useRef(new Animated.Value(-700)).current;
+
+  useEffect(() => {
+    // Beam 1
+    Animated.loop(
+      Animated.timing(beamTranslateX1, {
+        toValue: 800, // move across screen
+        duration: 8000,
+        useNativeDriver: true,
+        easing: Animated.linear,
+      }),
+    ).start();
+
+    // Beam 2 (slower, different start)
+    Animated.loop(
+      Animated.timing(beamTranslateX2, {
+        toValue: 1000,
+        duration: 12000,
+        useNativeDriver: true,
+        easing: Animated.linear,
+      }),
+    ).start();
+
+    // Beam 3 (fastest)
+    Animated.loop(
+      Animated.timing(beamTranslateX3, {
+        toValue: 900,
+        duration: 6000,
+        useNativeDriver: true,
+        easing: Animated.linear,
+      }),
+    ).start();
+  }, []);
+
   // Email validation
   useEffect(() => {
     if (email.length === 0) {
@@ -285,18 +322,112 @@ export default function LoginScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.container}>
-          {/* TOP IMAGE */}
-          <ImageBackground
-            source={require("../../assets/bg.jpg")}
-            style={styles.topSection}
-            resizeMode="cover"
-          >
-            <BlurView intensity={30} style={StyleSheet.absoluteFill} />
-            <LinearGradient
-              colors={["rgba(0,0,0,0.3)", "rgba(0,0,0,0.6)"]}
-              style={StyleSheet.absoluteFill}
-            />
-          </ImageBackground>
+          {/* TOP IMAGE WITH LIGHT BEAMS */}
+          <View style={styles.topSection}>
+            <ImageBackground
+              source={require("../../assets/bg.jpg")}
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
+            >
+              <BlurView intensity={30} style={StyleSheet.absoluteFill} />
+              <LinearGradient
+                colors={["rgba(0,0,0,0.3)", "rgba(0,0,0,0.6)"]}
+                style={StyleSheet.absoluteFill}
+              />
+            </ImageBackground>
+
+            {/* Animated Light Beams */}
+            <View style={styles.lightBeamsContainer} pointerEvents="none">
+              <Animated.View
+                style={[
+                  styles.lightBeam,
+                  {
+                    transform: [{ translateX: beamTranslateX1 }],
+                    opacity: 0.25,
+                    width: "150%",
+                    height: "200%",
+                    backgroundColor: "transparent",
+                    position: "absolute",
+                    top: -50,
+                    left: 0,
+                    transform: [
+                      { rotate: "25deg" },
+                      { translateX: beamTranslateX1 },
+                    ],
+                  },
+                ]}
+              >
+                <LinearGradient
+                  colors={[
+                    "rgba(255,255,255,0)",
+                    "rgba(232,184,75,0.15)",
+                    "rgba(255,255,255,0)",
+                  ]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+              </Animated.View>
+
+              <Animated.View
+                style={[
+                  styles.lightBeam,
+                  {
+                    transform: [{ translateX: beamTranslateX2 }],
+                    opacity: 0.2,
+                    width: "180%",
+                    height: "180%",
+                    top: -30,
+                    left: -50,
+                    transform: [
+                      { rotate: "35deg" },
+                      { translateX: beamTranslateX2 },
+                    ],
+                  },
+                ]}
+              >
+                <LinearGradient
+                  colors={[
+                    "rgba(255,255,255,0)",
+                    "rgba(255,215,0,0.12)",
+                    "rgba(255,255,255,0)",
+                  ]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+              </Animated.View>
+
+              <Animated.View
+                style={[
+                  styles.lightBeam,
+                  {
+                    transform: [{ translateX: beamTranslateX3 }],
+                    opacity: 0.3,
+                    width: "120%",
+                    height: "220%",
+                    top: 20,
+                    left: 20,
+                    transform: [
+                      { rotate: "15deg" },
+                      { translateX: beamTranslateX3 },
+                    ],
+                  },
+                ]}
+              >
+                <LinearGradient
+                  colors={[
+                    "rgba(255,255,255,0)",
+                    "rgba(232,184,75,0.2)",
+                    "rgba(255,255,255,0)",
+                  ]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+              </Animated.View>
+            </View>
+          </View>
 
           {/* GLASSY SECTION */}
           <BlurView intensity={50} tint="dark" style={styles.bottomSection}>
@@ -594,7 +725,22 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topSection: { flex: 0.45, overflow: "hidden" },
+  topSection: {
+    flex: 0.45,
+    overflow: "hidden",
+    position: "relative",
+  },
+  lightBeamsContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+    overflow: "hidden",
+  },
+  lightBeam: {
+    position: "absolute",
+    width: "200%",
+    height: "200%",
+    // The gradient is applied via the LinearGradient inside the Animated.View
+  },
   bottomSection: {
     position: "absolute",
     bottom: 0,
