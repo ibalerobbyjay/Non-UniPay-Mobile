@@ -323,9 +323,17 @@ export default function RegisterScreen({ navigation }) {
                     placeholderTextColor="#999"
                     style={styles.input}
                     value={formData.student_no}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, student_no: text })
-                    }
+                    keyboardType="numeric" // shows numeric keypad
+                    onChangeText={(text) => {
+                      // Allow only digits and hyphen (max one hyphen)
+                      let filtered = text.replace(/[^0-9-]/g, "");
+                      // Optional: prevent multiple hyphens
+                      const hyphenCount = (filtered.match(/-/g) || []).length;
+                      if (hyphenCount > 1) {
+                        filtered = filtered.slice(0, -1);
+                      }
+                      setFormData({ ...formData, student_no: filtered });
+                    }}
                   />
                 </View>
                 {studentNoError ? (

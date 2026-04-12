@@ -1,9 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 
-export const SERVER_ROOT = "https://daniele-cosmic-vapidly.ngrok-free.dev";
+export const SERVER_ROOT = "https://non-unipay.up.railway.app";
 
-// API root only
 const api = axios.create({
   baseURL: `${SERVER_ROOT}/api`,
   headers: {
@@ -13,7 +12,6 @@ const api = axios.create({
   },
 });
 
-// Automatically attach token for authenticated requests
 api.interceptors.request.use(async (config) => {
   try {
     const token = await AsyncStorage.getItem("@token");
@@ -26,7 +24,6 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Global response interceptor
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -40,29 +37,18 @@ api.interceptors.response.use(
   },
 );
 
-/**
- * Converts any profile picture path/URL returned by Laravel into
- * a correct absolute URL pointing at the current ngrok tunnel.
- *
- * Handles three cases:
- *  1. Already a full URL (http/https) — replaces the host with SERVER_ROOT
- *  2. Relative path starting with "storage/" — prepends SERVER_ROOT + "/"
- *  3. Relative path without leading slash  — prepends SERVER_ROOT + "/storage/"
- */
 export function getImageUrl(path) {
   if (!path) return null;
 
   if (path.startsWith("http://") || path.startsWith("https://")) {
-    // Replace whatever host Laravel used (localhost, 127.0.0.1, old ngrok, etc.)
     return path.replace(/https?:\/\/[^/]+/, SERVER_ROOT);
   }
 
   if (path.startsWith("storage/") || path.startsWith("/storage/")) {
-    const clean = path.replace(/^\//, ""); // strip leading slash if any
+    const clean = path.replace(/^\//, "");
     return `${SERVER_ROOT}/${clean}`;
   }
 
-  // Raw relative path like "profile_pictures/xxx.jpg"
   return `${SERVER_ROOT}/storage/${path}`;
 }
 
