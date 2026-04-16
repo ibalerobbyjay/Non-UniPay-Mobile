@@ -25,7 +25,7 @@ import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import api, { getImageUrl } from "../services/api";
 
-const COURSES = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
+// ── No more hardcoded COURSES constant ──────────────────────────────────────
 const YEAR_LEVELS = ["1", "2", "3", "4"];
 const SUPPORT_EMAIL = "nonunipay@gmail.com";
 
@@ -454,6 +454,8 @@ export default function ProfileScreen({ navigation }) {
   const { isDark, toggleTheme, colors } = useTheme();
 
   const [profile, setProfile] = useState(null);
+  const [courses, setCourses] = useState([]); // ← dynamic courses
+  const [coursesLoading, setCoursesLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
     contact: "",
@@ -468,7 +470,7 @@ export default function ProfileScreen({ navigation }) {
   const [pictureCooldown, setPictureCooldown] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [showQrModal, setShowQrModal] = useState(false); // new state for QR modal
+  const [showQrModal, setShowQrModal] = useState(false);
 
   // Security
   const [changingPassword, setChangingPassword] = useState(false);
@@ -520,6 +522,23 @@ export default function ProfileScreen({ navigation }) {
     });
   };
 
+  // ─── Fetch courses from API ────────────────────────────────────────────────
+  const loadCourses = async () => {
+    try {
+      setCoursesLoading(true);
+      const response = await api.get("/courses");
+      // API returns array of { id, code, name }
+      setCourses(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error("Error loading courses:", error);
+      // Silently fail — picker will just be empty, not crash
+      setCourses([]);
+    } finally {
+      setCoursesLoading(false);
+    }
+  };
+
+  // ─── Fetch profile ─────────────────────────────────────────────────────────
   const loadProfile = async () => {
     try {
       const response = await api.get("/student/profile");
@@ -568,15 +587,17 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  // ─── Load both on focus ────────────────────────────────────────────────────
   useFocusEffect(
     useCallback(() => {
-      loadProfile();
+      // Run both in parallel for speed
+      Promise.all([loadProfile(), loadCourses()]);
     }, []),
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadProfile();
+    await Promise.all([loadProfile(), loadCourses()]);
     setRefreshing(false);
   };
 
@@ -871,7 +892,7 @@ export default function ProfileScreen({ navigation }) {
         </LinearGradient>
 
         <View style={styles.content}>
-          {/* Student Information section (unchanged) */}
+          {/* ── Student Information ── */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <Text style={s.sectionTitle}>Student Information</Text>
@@ -933,6 +954,7 @@ export default function ProfileScreen({ navigation }) {
                   />
                 </View>
 
+                {/* ── Dynamic Course Picker ── */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Course</Text>
                   <View
@@ -941,40 +963,54 @@ export default function ProfileScreen({ navigation }) {
                       { backgroundColor: colors.inputBackground },
                     ]}
                   >
-                    <Picker
-                      selectedValue={formData.course}
-                      onValueChange={(v) =>
-                        setFormData({ ...formData, course: v })
-                      }
-                      style={[
-                        s.picker,
-                        {
+                    {coursesLoading ? (
+                      <View style={s.pickerLoadingRow}>
+                        <ActivityIndicator size="small" color={colors.brand} />
+                        <Text
+                          style={[
+                            s.pickerLoadingText,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          Loading courses…
+                        </Text>
+                      </View>
+                    ) : (
+                      <Picker
+                        selectedValue={formData.course}
+                        onValueChange={(v) =>
+                          setFormData({ ...formData, course: v })
+                        }
+                        style={[
+                          s.picker,
+                          {
+                            color: colors.textPrimary,
+                            backgroundColor: colors.inputBackground,
+                          },
+                        ]}
+                        dropdownIconColor={colors.textSecondary}
+                        itemStyle={{
                           color: colors.textPrimary,
                           backgroundColor: colors.inputBackground,
-                        },
-                      ]}
-                      dropdownIconColor={colors.textSecondary}
-                      itemStyle={{
-                        color: colors.textPrimary,
-                        backgroundColor: colors.inputBackground,
-                      }}
-                    >
-                      <Picker.Item
-                        label="Select Course"
-                        value=""
-                        color={isDark ? "#94a3b8" : colors.textMuted}
-                        style={{ backgroundColor: colors.inputBackground }}
-                      />
-                      {COURSES.map((c) => (
+                        }}
+                      >
                         <Picker.Item
-                          key={c}
-                          label={c}
-                          value={c}
-                          color={colors.textPrimary}
+                          label="Select Course"
+                          value=""
+                          color={isDark ? "#94a3b8" : colors.textMuted}
                           style={{ backgroundColor: colors.inputBackground }}
                         />
-                      ))}
-                    </Picker>
+                        {courses.map((c) => (
+                          <Picker.Item
+                            key={c.id}
+                            label={c.code}
+                            value={c.code}
+                            color={colors.textPrimary}
+                            style={{ backgroundColor: colors.inputBackground }}
+                          />
+                        ))}
+                      </Picker>
+                    )}
                   </View>
                 </View>
 
@@ -1067,7 +1103,7 @@ export default function ProfileScreen({ navigation }) {
             )}
           </View>
 
-          {/* Account Security section (unchanged) */}
+          {/* ── Account Security ── */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <View style={styles.sectionTitleRow}>
@@ -1279,7 +1315,7 @@ export default function ProfileScreen({ navigation }) {
             )}
           </View>
 
-          {/* Appearance section (unchanged) */}
+          {/* ── Appearance ── */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <View style={styles.sectionTitleRow}>
@@ -1323,7 +1359,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Support & Legal section (unchanged) */}
+          {/* ── Support & Legal ── */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <View style={styles.sectionTitleRow}>
@@ -1404,7 +1440,7 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Logout button (unchanged) */}
+          {/* ── Logout ── */}
           <TouchableOpacity style={s.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color="#f44336" />
             <Text style={styles.logoutText}>Logout</Text>
@@ -1416,7 +1452,7 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* Legal Modals (unchanged) */}
+      {/* Legal Modals */}
       <LegalModal
         visible={showPrivacy}
         onClose={() => setShowPrivacy(false)}
@@ -1430,7 +1466,7 @@ export default function ProfileScreen({ navigation }) {
         sections={TERMS_CONTENT}
       />
 
-      {/* Logout Confirmation Modal (unchanged) */}
+      {/* Logout Confirmation Modal */}
       <LogoutModal
         visible={showLogoutModal}
         onConfirm={confirmLogout}
@@ -1438,10 +1474,10 @@ export default function ProfileScreen({ navigation }) {
         colors={colors}
       />
 
-      {/* Logout Loading Overlay (unchanged) */}
+      {/* Logout Loading Overlay */}
       <LogoutLoadingOverlay visible={loggingOut} />
 
-      {/* Alert Modal (unchanged) */}
+      {/* Alert Modal */}
       <AlertModal
         visible={alertModal.visible}
         title={alertModal.title}
@@ -1450,7 +1486,7 @@ export default function ProfileScreen({ navigation }) {
         onClose={closeAlert}
       />
 
-      {/* Image Picker Modal (unchanged) */}
+      {/* Image Picker Modal */}
       <Modal
         visible={showImagePickerModal}
         transparent
@@ -1507,7 +1543,7 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* QR Code Modal with Blur and Student Name */}
+      {/* QR / ID Card Modal */}
       <Modal
         visible={showQrModal}
         transparent
@@ -1526,7 +1562,6 @@ export default function ProfileScreen({ navigation }) {
               Student ID Card
             </Text>
 
-            {/* Student Name */}
             <Text
               style={{
                 fontSize: 18,
@@ -1538,7 +1573,6 @@ export default function ProfileScreen({ navigation }) {
               {user?.name}
             </Text>
 
-            {/* Student Number */}
             <Text
               style={[
                 alertModalStyles.message,
@@ -1548,7 +1582,6 @@ export default function ProfileScreen({ navigation }) {
               {profile?.student_no || "Not available"}
             </Text>
 
-            {/* Course */}
             {profile?.course && (
               <Text
                 style={{
@@ -1661,6 +1694,17 @@ function makeStyles(colors) {
       overflow: "hidden",
     },
     picker: { height: 50, width: "100%" },
+    // Loading state inside picker container
+    pickerLoadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      padding: 14,
+      height: 50,
+    },
+    pickerLoadingText: {
+      fontSize: 14,
+    },
     cancelButton: { backgroundColor: colors.borderLight },
     cancelButtonText: {
       color: colors.textSecondary,
@@ -1724,7 +1768,7 @@ function makeStyles(colors) {
   });
 }
 
-// ─── Modal Styles (unchanged) ────────────────────────────────────────────────
+// ─── Modal Styles ─────────────────────────────────────────────────────────────
 const alertModalStyles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -1883,10 +1927,7 @@ const logoutLoadingStyles = StyleSheet.create({
     shadowRadius: 22,
     elevation: 14,
   },
-  logo: {
-    width: "100%",
-    height: "100%",
-  },
+  logo: { width: "100%", height: "100%" },
   text: {
     marginTop: 20,
     fontSize: 18,
@@ -1920,10 +1961,7 @@ const profileLoadingStyles = StyleSheet.create({
     shadowRadius: 22,
     elevation: 14,
   },
-  logo: {
-    width: "100%",
-    height: "100%",
-  },
+  logo: { width: "100%", height: "100%" },
   text: {
     marginTop: 20,
     fontSize: 18,
@@ -1941,7 +1979,7 @@ const profileLoadingStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerGradient: {
-    paddingTop: 20, // reduced to fit top row
+    paddingTop: 20,
     paddingBottom: 30,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
@@ -1969,7 +2007,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.15)",
     justifyContent: "center",
     alignItems: "center",
-    transform: [{ translateY: 20 }], // adjust value as needed (e.g., 8 or 10)
+    transform: [{ translateY: 20 }],
   },
   avatarSection: { alignItems: "center" },
   avatarContainer: { marginBottom: 15, position: "relative" },
