@@ -40,10 +40,12 @@ api.interceptors.response.use(
 export function getImageUrl(path) {
   if (!path) return null;
 
+  // Already a full external URL — return as-is (Cloudinary, etc.)
   if (path.startsWith("http://") || path.startsWith("https://")) {
-    return path.replace(/https?:\/\/[^/]+/, SERVER_ROOT);
+    return path;
   }
 
+  // Legacy local storage paths
   if (path.startsWith("storage/") || path.startsWith("/storage/")) {
     const clean = path.replace(/^\//, "");
     return `${SERVER_ROOT}/${clean}`;
@@ -51,5 +53,4 @@ export function getImageUrl(path) {
 
   return `${SERVER_ROOT}/storage/${path}`;
 }
-
 export default api;

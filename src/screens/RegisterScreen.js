@@ -44,7 +44,7 @@ export default function RegisterScreen({ navigation }) {
   const [studentNoError, setStudentNoError] = useState("");
   const [contactError, setContactError] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [passwordStrength, setPasswordStrength] = useState(0); // 0-4
+  const [passwordStrength, setPasswordStrength] = useState(0);
   const [passwordMatch, setPasswordMatch] = useState(true);
 
   // Modal states
@@ -55,32 +55,44 @@ export default function RegisterScreen({ navigation }) {
   const [alertModalVisible, setAlertModalVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
-  const [alertSuccess, setAlertSuccess] = useState(false); // true for success, false for error
+  const [alertSuccess, setAlertSuccess] = useState(false);
   const modalAnim = useRef(new Animated.Value(0)).current;
 
   // Loading overlay animation
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const courses = ["BSIT", "BEED", "BSED", "BSCRIM", "BSOA", "BSPOLSCI"];
+  // ── Dynamic data from API ──────────────────────────────────────
+  const [courses, setCourses] = useState([]); // [{ id, code, name }]
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  // ──────────────────────────────────────────────────────────────
+
   const yearLevels = ["1", "2", "3", "4"];
 
-  // Load school year and semester on mount
+  // Load school year, semester, and courses on mount
   useEffect(() => {
+    setCoursesLoading(true);
     api
       .get("/school-years")
       .then((res) => {
+        // School year
         const years = res.data.school_years || [];
         const current = years.find((y) => y.is_current == 1) || null;
         if (current) {
           setFormData((prev) => ({ ...prev, school_year: current.name }));
         }
 
+        // Current semester
         const currentSemester = res.data.current_semester || null;
         if (currentSemester) {
           setFormData((prev) => ({ ...prev, semester: currentSemester.name }));
         }
+
+        // Courses — array of { id, code, name }
+        const fetchedCourses = res.data.courses || [];
+        setCourses(fetchedCourses);
       })
-      .catch((err) => console.error("Failed to load school years:", err));
+      .catch((err) => console.error("Failed to load school years:", err))
+      .finally(() => setCoursesLoading(false));
   }, []);
 
   // Validate email
@@ -239,6 +251,14 @@ export default function RegisterScreen({ navigation }) {
     outputRange: [0, 1],
   });
 
+  // Label shown in the course picker button
+  const coursePickerLabel = () => {
+    if (formData.course) return formData.course;
+    if (coursesLoading) return "Loading courses...";
+    if (courses.length === 0) return "No courses available";
+    return "Select Course";
+  };
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -323,11 +343,9 @@ export default function RegisterScreen({ navigation }) {
                     placeholderTextColor="#999"
                     style={styles.input}
                     value={formData.student_no}
-                    keyboardType="numeric" // shows numeric keypad
+                    keyboardType="numeric"
                     onChangeText={(text) => {
-                      // Allow only digits and hyphen (max one hyphen)
                       let filtered = text.replace(/[^0-9-]/g, "");
-                      // Optional: prevent multiple hyphens
                       const hyphenCount = (filtered.match(/-/g) || []).length;
                       if (hyphenCount > 1) {
                         filtered = filtered.slice(0, -1);
@@ -341,10 +359,18 @@ export default function RegisterScreen({ navigation }) {
                 ) : null}
               </View>
 
-              {/* Course Picker */}
+              {/* Course Picker — dynamic from API */}
               <TouchableOpacity
-                style={styles.inputContainer}
-                onPress={() => setCourseModalVisible(true)}
+                style={[
+                  styles.inputContainer,
+                  (coursesLoading || courses.length === 0) && { opacity: 0.6 },
+                ]}
+                onPress={() => {
+                  if (!coursesLoading && courses.length > 0) {
+                    setCourseModalVisible(true);
+                  }
+                }}
+                disabled={coursesLoading || courses.length === 0}
               >
                 <Ionicons name="book-outline" size={20} color="#666" />
                 <Text
@@ -353,9 +379,13 @@ export default function RegisterScreen({ navigation }) {
                     { color: formData.course ? "#000" : "#999" },
                   ]}
                 >
-                  {formData.course || "Select Course"}
+                  {coursePickerLabel()}
                 </Text>
-                <Ionicons name="chevron-down" size={20} color="#999" />
+                {coursesLoading ? (
+                  <ActivityIndicator size="small" color="#999" />
+                ) : (
+                  <Ionicons name="chevron-down" size={20} color="#999" />
+                )}
               </TouchableOpacity>
 
               {/* Year Level Picker */}
@@ -620,7 +650,7 @@ export default function RegisterScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* CUSTOM ALERT MODAL with centered icon */}
+      {/* CUSTOM ALERT MODAL */}
       <Modal
         visible={alertModalVisible}
         transparent
@@ -643,7 +673,6 @@ export default function RegisterScreen({ navigation }) {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                {/* Centered icon */}
                 <View style={styles.centeredIconWrapper}>
                   <View style={styles.modalIconWrapper}>
                     <Ionicons
@@ -691,7 +720,7 @@ export default function RegisterScreen({ navigation }) {
         </Animated.View>
       </Modal>
 
-      {/* Course Modal */}
+      {/* Course Modal — populated from API */}
       <Modal visible={courseModalVisible} transparent animationType="slide">
         <View style={styles.modalContainer}>
           <View style={styles.modalContentBottomSheet}>
@@ -703,21 +732,29 @@ export default function RegisterScreen({ navigation }) {
             </View>
             <FlatList
               data={courses}
-              keyExtractor={(item) => item}
+              keyExtractor={(item) => String(item.id)}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => {
-                    setFormData({ ...formData, course: item });
+                    setFormData({ ...formData, course: item.code });
                     setCourseModalVisible(false);
                   }}
                 >
-                  <Text style={styles.modalItemText}>{item}</Text>
-                  {formData.course === item && (
+                  <View>
+                    <Text style={styles.modalItemText}>{item.code}</Text>
+                    {item.name ? (
+                      <Text style={styles.modalItemSubText}>{item.name}</Text>
+                    ) : null}
+                  </View>
+                  {formData.course === item.code && (
                     <Ionicons name="checkmark" size={24} color="#0f3c91" />
                   )}
                 </TouchableOpacity>
               )}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>No courses found.</Text>
+              }
             />
           </View>
         </View>
@@ -918,6 +955,18 @@ const styles = StyleSheet.create({
   modalItemText: {
     fontSize: 16,
     color: "#333",
+    fontWeight: "600",
+  },
+  modalItemSubText: {
+    fontSize: 12,
+    color: "#888",
+    marginTop: 2,
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#aaa",
+    padding: 24,
+    fontSize: 14,
   },
 
   // Loading overlay styles
@@ -1010,19 +1059,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     marginLeft: 10,
-  },
-  modalTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 12,
-    // textAlign: "center" (added inline)
-  },
-  modalDescription: {
-    fontSize: 14,
-    color: "#555",
-    lineHeight: 20,
-    marginBottom: 25,
-    // textAlign: "center" (added inline)
   },
   centeredIconWrapper: {
     alignItems: "center",
