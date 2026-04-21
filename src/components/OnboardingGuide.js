@@ -5,41 +5,20 @@ import {
   Animated,
   Dimensions,
   Modal,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-
-const { width: SW, height: SH } = Dimensions.get("window");
-const s = (n) => Math.round((SW / 360) * n);
-const vs = (n) => Math.round((SH / 800) * n);
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const storageKey = (uid) => `onboarding_v5_${uid}`;
 
-const TAB_BAR_HEIGHT = 62;
 const TAB_COUNT = 5;
-const TAB_W = SW / TAB_COUNT;
-const UNIBOT_ICON_SIZE = s(34);
-const TAB_BAR_OFFSET = -39;
-
-function tabRect(index) {
-  return {
-    x: index * TAB_W,
-    y: SH - TAB_BAR_HEIGHT - TAB_BAR_OFFSET,
-    width: TAB_W,
-    height: TAB_BAR_HEIGHT,
-    borderRadius: 0,
-  };
-}
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
-// type: "center"  → no highlight, card centered
-// type: "element" → highlight a measured element via layoutKey
-// type: "tab"     → highlight a tab bar slot (tabIndex 0–4, skip 2)
-// type: "unibot"  → UniBot step, NO spotlight, bouncing arrow shown instead
 const BASE_STEPS = [
-  // 1 ── Welcome
   {
     id: "welcome",
     type: "center",
@@ -50,7 +29,6 @@ const BASE_STEPS = [
     title: "Welcome to UniPay! ",
     body: "This is your all-in-one student portal for managing school fees, checking exam clearance, and paying your balance. Let's take a quick tour!",
   },
-  // 2 ── Header
   {
     id: "header",
     type: "element",
@@ -61,7 +39,6 @@ const BASE_STEPS = [
     title: "Your Dashboard Header",
     body: "At the top you'll see your name, student number, and the current exam period. Tap the bell to check notifications, or tap your profile photo to open your profile.",
   },
-  // 3 ── Clearance card
   {
     id: "clearance_card",
     type: "element",
@@ -72,7 +49,6 @@ const BASE_STEPS = [
     title: "Exam Clearance Status",
     body: "This card shows CLEARED or PENDING. You need a ₱0 remaining balance to be automatically cleared for exams. It updates instantly after every payment.",
   },
-  // 4 ── Summary cards
   {
     id: "summary_cards",
     type: "element",
@@ -83,7 +59,6 @@ const BASE_STEPS = [
     title: "Fee Summary Cards",
     body: "Swipe through three cards:\n\n① Total Fees — your full amount due\n② Total Paid — what you've paid with a breakdown\n③ Remaining — your balance and payment status.",
   },
-  // 5 ── View Fees
   {
     id: "fees_action",
     type: "element",
@@ -94,7 +69,6 @@ const BASE_STEPS = [
     title: "View Fees Shortcut",
     body: "Jump straight to your full fee breakdown — tuition, miscellaneous, and exam fees are listed separately with amounts and subtotals.",
   },
-  // 6 ── Pay Fees
   {
     id: "pay_action",
     type: "element",
@@ -105,7 +79,6 @@ const BASE_STEPS = [
     title: "Pay Your Fees",
     body: "Tap here to pay via GCash. You'll see your exact balance due, enter your GCash reference number, and submit. Payments reflect within minutes and clearance updates automatically.",
   },
-  // 7 ── Payment History
   {
     id: "history_action",
     type: "element",
@@ -116,7 +89,6 @@ const BASE_STEPS = [
     title: "Payment History",
     body: "View every transaction you've made — date, amount, and reference number. You can download an official receipt for any payment directly from this screen.",
   },
-  // 8 ── Home tab
   {
     id: "tab_home",
     type: "tab",
@@ -127,7 +99,6 @@ const BASE_STEPS = [
     title: "Home Tab",
     body: "This is your main dashboard. Come back here any time for a quick overview of your fees, clearance status, and quick actions.",
   },
-  // 9 ── Fees tab
   {
     id: "tab_fees",
     type: "tab",
@@ -138,7 +109,6 @@ const BASE_STEPS = [
     title: "Fees Screen",
     body: "The Fees tab shows a full itemized list of everything you owe — organized by Tuition, Miscellaneous, and Exam fees. Grand total and remaining balance are at the bottom.",
   },
-  // 10 ── UniBot (no spotlight)
   {
     id: "tab_unibot",
     type: "unibot",
@@ -149,7 +119,6 @@ const BASE_STEPS = [
     title: "UniBot — Your AI Assistant ",
     body: 'That glowing button in the center of the nav bar is UniBot! Your AI-powered helper, available 24/7.\n\nAsk it anything:\n• "How do I pay my fees?"\n• "Why am I not cleared?"\n• "What documents do I need?"\n\nJust tap the center button!',
   },
-  // 11 ── Clearance tab
   {
     id: "tab_clearance",
     type: "tab",
@@ -160,7 +129,6 @@ const BASE_STEPS = [
     title: "Clearance Screen",
     body: "The Clearance tab shows your official exam clearance details — cleared/pending status, exam period, semester, school year, and the exact date you were cleared.",
   },
-  // 12 ── Profile tab
   {
     id: "tab_profile",
     type: "tab",
@@ -171,7 +139,6 @@ const BASE_STEPS = [
     title: "Your Profile",
     body: "The Profile tab lets you:\n\n• Update contact info, course & year\n• Change your profile photo\n• Change your password\n• Toggle dark / light mode\n• Read Privacy Policy & Terms\n• Log out",
   },
-  // 13 ── Tips
   {
     id: "tips",
     type: "center",
@@ -182,7 +149,6 @@ const BASE_STEPS = [
     title: "Helpful Tips 💡",
     body: "• Pull down on any screen to refresh\n• GCash payments need a valid reference number\n• Profile edits: 3-day cooldown; photos: 7-day cooldown\n• Clearance updates automatically — no need to ask\n• UniBot can answer most questions instantly",
   },
-  // 14 ── Done
   {
     id: "done",
     type: "center",
@@ -236,7 +202,40 @@ export default function OnboardingGuide({
   userName,
   getElementRect,
   scrollToElement,
+  // ── NEW: accept tab bar measurements from the host ──────────────────────────
+  // Pass tabBarHeight (number) and tabBarY (number, absolute Y of the tab bar
+  // top) from the host screen so positioning is device-independent.
+  // If not supplied the component falls back to estimation.
+  tabBarHeight: tabBarHeightProp,
+  tabBarY: tabBarYProp,
 }) {
+  const insets = useSafeAreaInsets();
+  const { width: SW, height: SH } = Dimensions.get("window");
+
+  // ── Responsive scalar helpers (recomputed from current window size) ────────
+  const s = (n) => Math.round((SW / 360) * n);
+  const vs = (n) => Math.round((SH / 800) * n);
+
+  // ── Tab bar geometry ───────────────────────────────────────────────────────
+  // Use measured values when provided, otherwise estimate from safe-area insets.
+  const TAB_BAR_HEIGHT =
+    tabBarHeightProp ?? (Platform.OS === "ios" ? 49 + insets.bottom : 56);
+  // Y position of the top of the tab bar in absolute screen coordinates
+  const TAB_BAR_TOP = tabBarYProp ?? SH - TAB_BAR_HEIGHT;
+  const TAB_W = SW / TAB_COUNT;
+  const UNIBOT_ICON_SIZE = s(34);
+
+  // ── Build tabRect using measured/derived values ────────────────────────────
+  function tabRect(index) {
+    return {
+      x: index * TAB_W,
+      y: TAB_BAR_TOP,
+      width: TAB_W,
+      height: TAB_BAR_HEIGHT,
+      borderRadius: 0,
+    };
+  }
+
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
   const [targetRect, setTargetRect] = useState(null);
@@ -244,10 +243,7 @@ export default function OnboardingGuide({
 
   const STEPS = BASE_STEPS.map((st, idx) => {
     if (idx === 0 && userName) {
-      return {
-        ...st,
-        title: `Welcome, ${userName.split(" ")[0]}! `,
-      };
+      return { ...st, title: `Welcome, ${userName.split(" ")[0]}! ` };
     }
     return st;
   });
@@ -342,7 +338,7 @@ export default function OnboardingGuide({
     return () => loop.stop();
   }, [step, visible]);
 
-  // ─── IMPROVED RECT RESOLVER WITH SCROLL ─────────────────────────────────
+  // ── Rect resolver ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!visible) return;
     const currentStep = STEPS[step];
@@ -363,7 +359,6 @@ export default function OnboardingGuide({
 
     let attempts = 0;
     const maxAttempts = 10;
-    const interval = 150;
 
     const load = async () => {
       const rect = await getElementRect(
@@ -372,22 +367,17 @@ export default function OnboardingGuide({
       );
       if (!rect) {
         attempts++;
-        if (attempts < maxAttempts) setTimeout(load, interval);
+        if (attempts < maxAttempts) setTimeout(load, 150);
         return;
       }
 
-      // Check if element is visible in the current viewport
-      const headerHeight = 100; // approximate top bar height (adjust if needed)
-      const visibleTop = headerHeight;
-      const visibleBottom = SH - 80; // leave room for bottom tabs
+      const visibleTop = 100;
+      const visibleBottom = SH - TAB_BAR_HEIGHT - 20;
       const isVisible =
         rect.y >= visibleTop && rect.y + rect.height <= visibleBottom;
 
       if (!isVisible && scrollToElement) {
-        // Scroll so that the element appears 100px from the top
-        const scrollOffset = rect.y - 100;
-        scrollToElement(scrollOffset);
-        // Wait for scroll to finish, then re‑fetch rect
+        scrollToElement(rect.y - 100);
         setTimeout(async () => {
           const r2 = await getElementRect(
             currentStep.layoutKey,
@@ -401,7 +391,14 @@ export default function OnboardingGuide({
     };
 
     load();
-  }, [step, visible, getElementRect, scrollToElement]);
+  }, [
+    step,
+    visible,
+    getElementRect,
+    scrollToElement,
+    TAB_BAR_HEIGHT,
+    TAB_BAR_TOP,
+  ]);
 
   useEffect(() => {
     if (targetRect && !isLoadingRect) {
@@ -466,13 +463,15 @@ export default function OnboardingGuide({
   let arrowLeft = null;
 
   if (current.type === "tab" && rect) {
-    tooltipStyle = { bottom: TAB_BAR_HEIGHT + GAP + 8 };
+    // Position tooltip above the tab bar with a small gap
+    tooltipStyle = { bottom: SH - TAB_BAR_TOP + GAP + 8 };
     arrowDir = "bottom";
     const cx = rect.x + rect.width / 2;
     const cw = SW - CARD_MARGIN * 2;
     arrowLeft = Math.max(12, Math.min(cx - CARD_MARGIN - 12, cw - 24));
   } else if (current.type === "unibot") {
-    tooltipStyle = { bottom: TAB_BAR_HEIGHT + 58 + GAP + 24 };
+    // Position tooltip above the center UniBot button
+    tooltipStyle = { bottom: SH - TAB_BAR_TOP + 58 + GAP + 24 };
     arrowDir = null;
   } else if (current.type === "center" || !rect) {
     tooltipStyle = { top: SH / 2 - CARD_EST_H / 2 };
@@ -514,7 +513,11 @@ export default function OnboardingGuide({
     };
   }
 
-  // Section label for chip
+  // ── UniBot arrow position — always centred on the middle tab ──────────────
+  const unibotCenterX = TAB_W * 2 + TAB_W / 2 - UNIBOT_ICON_SIZE / 2;
+  // Sit just above the tab bar
+  const unibotBottom = SH - TAB_BAR_TOP + 15;
+
   const sectionLabel =
     current.type === "tab" || current.type === "unibot"
       ? "Navigation"
@@ -530,7 +533,7 @@ export default function OnboardingGuide({
       statusBarTranslucent
     >
       <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}>
-        {/* ── Spotlight (element + tab only) ── */}
+        {/* ── Spotlight ── */}
         {spotRect && !isLoadingRect && (
           <Animated.View
             style={[
@@ -548,12 +551,16 @@ export default function OnboardingGuide({
           />
         )}
 
-        {/* ── UniBot bouncing arrow (no spotlight) ── */}
+        {/* ── UniBot bouncing arrow ── */}
         {current.type === "unibot" && (
           <Animated.View
             style={[
               styles.unibotIndicator,
-              { transform: [{ translateY: unibotBounce }] },
+              {
+                left: unibotCenterX,
+                bottom: unibotBottom,
+                transform: [{ translateY: unibotBounce }],
+              },
             ]}
           >
             <Ionicons
@@ -561,7 +568,9 @@ export default function OnboardingGuide({
               size={s(34)}
               color="rgb(244,180,20)"
             />
-            <Text style={styles.unibotTapText}>Tap me!</Text>
+            <Text style={[styles.unibotTapText, { fontSize: s(11) }]}>
+              Tap me!
+            </Text>
           </Animated.View>
         )}
 
@@ -591,14 +600,28 @@ export default function OnboardingGuide({
           <View style={styles.glassBg} />
           <View style={styles.glassBorder} />
 
-          <View style={styles.cardContent}>
+          <View
+            style={[
+              styles.cardContent,
+              {
+                paddingHorizontal: s(18),
+                paddingTop: vs(14),
+                paddingBottom: vs(16),
+              },
+            ]}
+          >
             {/* Progress */}
-            <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressTrack,
+                { height: vs(3), marginBottom: vs(12) },
+              ]}
+            >
               <View style={[styles.progressFill, { width: `${progress}%` }]} />
             </View>
 
             {/* Chip + close */}
-            <View style={styles.chipRow}>
+            <View style={[styles.chipRow, { marginBottom: vs(8) }]}>
               <View
                 style={[
                   styles.chip,
@@ -610,7 +633,12 @@ export default function OnboardingGuide({
                   size={s(12)}
                   color={current.iconColor}
                 />
-                <Text style={[styles.chipText, { color: current.iconColor }]}>
+                <Text
+                  style={[
+                    styles.chipText,
+                    { color: current.iconColor, fontSize: s(11) },
+                  ]}
+                >
                   {sectionLabel}
                 </Text>
               </View>
@@ -628,29 +656,66 @@ export default function OnboardingGuide({
             </View>
 
             {/* Title */}
-            <Text style={styles.title}>{current.title}</Text>
+            <Text
+              style={[
+                styles.title,
+                { fontSize: s(16), marginBottom: vs(7), lineHeight: s(22) },
+              ]}
+            >
+              {current.title}
+            </Text>
 
             {/* Body */}
-            <Text style={styles.body}>{current.body}</Text>
+            <Text
+              style={[
+                styles.body,
+                { fontSize: s(13), lineHeight: s(21), marginBottom: vs(16) },
+              ]}
+            >
+              {current.body}
+            </Text>
 
             {/* Footer */}
             <View style={styles.footer}>
-              <Text style={styles.stepLabel}>
+              <Text style={[styles.stepLabel, { fontSize: s(11) }]}>
                 {step + 1} / {STEPS.length}
               </Text>
-              <View style={styles.btnRow}>
+              <View style={[styles.btnRow, { gap: s(8) }]}>
                 {!isFirst && (
-                  <TouchableOpacity onPress={goPrev} style={styles.backBtn}>
+                  <TouchableOpacity
+                    onPress={goPrev}
+                    style={[
+                      styles.backBtn,
+                      {
+                        paddingHorizontal: s(14),
+                        paddingVertical: vs(8),
+                        borderRadius: s(12),
+                      },
+                    ]}
+                  >
                     <Ionicons
                       name="chevron-back"
                       size={s(13)}
                       color="rgba(255,255,255,0.5)"
                     />
-                    <Text style={styles.backText}>Back</Text>
+                    <Text style={[styles.backText, { fontSize: s(13) }]}>
+                      Back
+                    </Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity onPress={goNext} style={styles.nextBtn}>
-                  <Text style={styles.nextText}>
+                <TouchableOpacity
+                  onPress={goNext}
+                  style={[
+                    styles.nextBtn,
+                    {
+                      paddingHorizontal: s(20),
+                      paddingVertical: vs(8),
+                      borderRadius: s(12),
+                      gap: s(4),
+                    },
+                  ]}
+                >
+                  <Text style={[styles.nextText, { fontSize: s(13) }]}>
                     {isLast ? "Get Started" : "Next"}
                   </Text>
                   {!isLast && (
@@ -683,25 +748,22 @@ const styles = StyleSheet.create({
     shadowColor: "#6b9fff",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.9,
-    shadowRadius: s(14),
+    shadowRadius: 14,
     elevation: 0,
   },
   unibotIndicator: {
     position: "absolute",
-    left: TAB_W * 2 + TAB_W / 2 - UNIBOT_ICON_SIZE / 2,
-    bottom: TAB_BAR_HEIGHT + 15,
     alignItems: "center",
-    gap: vs(2),
+    gap: 2,
   },
   unibotTapText: {
     color: "rgb(244,180,20)",
-    fontSize: s(11),
     fontWeight: "700",
     letterSpacing: 0.5,
   },
   card: {
     position: "absolute",
-    borderRadius: s(24),
+    borderRadius: 24,
     overflow: "visible",
   },
   arrow: {
@@ -730,68 +792,54 @@ const styles = StyleSheet.create({
   glassBg: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(10, 18, 56, 0.88)",
-    borderRadius: s(24),
+    borderRadius: 24,
   },
   glassBorder: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: s(24),
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
-  cardContent: {
-    paddingHorizontal: s(18),
-    paddingTop: vs(14),
-    paddingBottom: vs(16),
-  },
+  cardContent: {},
   progressTrack: {
-    height: vs(3),
-    borderRadius: vs(2),
+    borderRadius: 2,
     backgroundColor: "rgba(255,255,255,0.1)",
-    marginBottom: vs(12),
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    borderRadius: vs(2),
+    borderRadius: 2,
     backgroundColor: "#818cf8",
   },
   chipRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: vs(8),
   },
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: s(5),
-    paddingHorizontal: s(10),
-    paddingVertical: vs(3),
-    borderRadius: s(20),
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
   },
   chipText: {
-    fontSize: s(11),
     fontWeight: "600",
     letterSpacing: 0.3,
   },
   closeBtn: {
-    padding: s(4),
-    borderRadius: s(8),
+    padding: 4,
+    borderRadius: 8,
     backgroundColor: "rgba(255,255,255,0.06)",
   },
   title: {
-    fontSize: s(16),
     fontWeight: "800",
     color: "#fff",
     letterSpacing: -0.3,
-    marginBottom: vs(7),
-    lineHeight: s(22),
   },
   body: {
-    fontSize: s(13),
     color: "rgba(255,255,255,0.74)",
-    lineHeight: s(21),
-    marginBottom: vs(16),
   },
   footer: {
     flexDirection: "row",
@@ -799,42 +847,31 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   stepLabel: {
-    fontSize: s(11),
     color: "rgba(255,255,255,0.28)",
     fontWeight: "500",
   },
   btnRow: {
     flexDirection: "row",
-    gap: s(8),
     alignItems: "center",
   },
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: s(3),
-    paddingHorizontal: s(14),
-    paddingVertical: vs(8),
-    borderRadius: s(12),
+    gap: 3,
     backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
   backText: {
-    fontSize: s(13),
     fontWeight: "600",
     color: "rgba(255,255,255,0.55)",
   },
   nextBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: s(4),
-    paddingHorizontal: s(20),
-    paddingVertical: vs(8),
-    borderRadius: s(12),
     backgroundColor: "#4f6ef7",
   },
   nextText: {
-    fontSize: s(13),
     fontWeight: "700",
     color: "#fff",
   },

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Non-UniPay",
     "slug": "nonunipay-mobile",
-    "owner": "robby.ibale",
+    "owner": "non-unipay",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "nonunipay",
@@ -54,7 +54,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "ebc10aa9-5c43-4b4a-a596-7bbe65224b39"
+        "projectId": "f9885eda-946d-4b00-83de-a4367999e02d"
       }
     }
   }

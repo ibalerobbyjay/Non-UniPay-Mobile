@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 
-export const SERVER_ROOT = "https://non-unipay.up.railway.app";
+export const SERVER_ROOT = "https://non-unipay.online";
 
 const api = axios.create({
   baseURL: `${SERVER_ROOT}/api`,

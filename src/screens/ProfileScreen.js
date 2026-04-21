@@ -526,12 +526,12 @@ export default function ProfileScreen({ navigation }) {
   const loadCourses = async () => {
     try {
       setCoursesLoading(true);
-      const response = await api.get("/courses");
-      // API returns array of { id, code, name }
-      setCourses(Array.isArray(response.data) ? response.data : []);
+      const response = await api.get("/school-years");
+      // The response contains { school_years: [], current_semester: {}, courses: [] }
+      const fetchedCourses = response.data.courses || [];
+      setCourses(fetchedCourses);
     } catch (error) {
       console.error("Error loading courses:", error);
-      // Silently fail — picker will just be empty, not crash
       setCourses([]);
     } finally {
       setCoursesLoading(false);
