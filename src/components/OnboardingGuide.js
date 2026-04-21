@@ -202,30 +202,21 @@ export default function OnboardingGuide({
   userName,
   getElementRect,
   scrollToElement,
-  // ── NEW: accept tab bar measurements from the host ──────────────────────────
-  // Pass tabBarHeight (number) and tabBarY (number, absolute Y of the tab bar
-  // top) from the host screen so positioning is device-independent.
-  // If not supplied the component falls back to estimation.
   tabBarHeight: tabBarHeightProp,
   tabBarY: tabBarYProp,
 }) {
   const insets = useSafeAreaInsets();
   const { width: SW, height: SH } = Dimensions.get("window");
 
-  // ── Responsive scalar helpers (recomputed from current window size) ────────
   const s = (n) => Math.round((SW / 360) * n);
   const vs = (n) => Math.round((SH / 800) * n);
 
-  // ── Tab bar geometry ───────────────────────────────────────────────────────
-  // Use measured values when provided, otherwise estimate from safe-area insets.
   const TAB_BAR_HEIGHT =
     tabBarHeightProp ?? (Platform.OS === "ios" ? 49 + insets.bottom : 56);
-  // Y position of the top of the tab bar in absolute screen coordinates
   const TAB_BAR_TOP = tabBarYProp ?? SH - TAB_BAR_HEIGHT;
   const TAB_W = SW / TAB_COUNT;
   const UNIBOT_ICON_SIZE = s(34);
 
-  // ── Build tabRect using measured/derived values ────────────────────────────
   function tabRect(index) {
     return {
       x: index * TAB_W,
@@ -314,9 +305,10 @@ export default function OnboardingGuide({
     return () => loop.stop();
   }, [step, visible]);
 
-  // UniBot bouncing arrow
+  // ── Bouncing arrow for both unibot and tab steps ───────────────────────────
   useEffect(() => {
-    if (!visible || STEPS[step]?.type !== "unibot") {
+    const stepType = STEPS[step]?.type;
+    if (!visible || (stepType !== "unibot" && stepType !== "tab")) {
       unibotBounce.setValue(0);
       return;
     }
@@ -463,14 +455,12 @@ export default function OnboardingGuide({
   let arrowLeft = null;
 
   if (current.type === "tab" && rect) {
-    // Position tooltip above the tab bar with a small gap
     tooltipStyle = { bottom: SH - TAB_BAR_TOP + GAP + 8 };
     arrowDir = "bottom";
     const cx = rect.x + rect.width / 2;
     const cw = SW - CARD_MARGIN * 2;
     arrowLeft = Math.max(12, Math.min(cx - CARD_MARGIN - 12, cw - 24));
   } else if (current.type === "unibot") {
-    // Position tooltip above the center UniBot button
     tooltipStyle = { bottom: SH - TAB_BAR_TOP + 58 + GAP + 24 };
     arrowDir = null;
   } else if (current.type === "center" || !rect) {
@@ -493,17 +483,9 @@ export default function OnboardingGuide({
     }
   }
 
-  // ── Spotlight rect ─────────────────────────────────────────────────────────
+  // ── Spotlight rect (element steps only — tab steps use the arrow instead) ──
   let spotRect = null;
-  if (current.type === "tab" && rect) {
-    spotRect = {
-      top: rect.y,
-      left: rect.x,
-      width: rect.width,
-      height: rect.height,
-      borderRadius: 0,
-    };
-  } else if (current.type === "element" && rect) {
+  if (current.type === "element" && rect) {
     spotRect = {
       top: rect.y + vShift - vPad,
       left: rect.x - hPad,
@@ -515,7 +497,6 @@ export default function OnboardingGuide({
 
   // ── UniBot arrow position — always centred on the middle tab ──────────────
   const unibotCenterX = TAB_W * 2 + TAB_W / 2 - UNIBOT_ICON_SIZE / 2;
-  // Sit just above the tab bar
   const unibotBottom = SH - TAB_BAR_TOP + 15;
 
   const sectionLabel =
@@ -533,7 +514,7 @@ export default function OnboardingGuide({
       statusBarTranslucent
     >
       <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}>
-        {/* ── Spotlight ── */}
+        {/* ── Spotlight (element steps only) ── */}
         {spotRect && !isLoadingRect && (
           <Animated.View
             style={[
@@ -551,7 +532,7 @@ export default function OnboardingGuide({
           />
         )}
 
-        {/* ── UniBot bouncing arrow ── */}
+        {/* ── UniBot bouncing yellow arrow ── */}
         {current.type === "unibot" && (
           <Animated.View
             style={[
@@ -571,6 +552,22 @@ export default function OnboardingGuide({
             <Text style={[styles.unibotTapText, { fontSize: s(11) }]}>
               Tap me!
             </Text>
+          </Animated.View>
+        )}
+
+        {/* ── Tab bouncing blue arrow ── */}
+        {current.type === "tab" && rect && (
+          <Animated.View
+            style={[
+              styles.unibotIndicator,
+              {
+                left: rect.x + rect.width / 2 - UNIBOT_ICON_SIZE / 2,
+                bottom: unibotBottom,
+                transform: [{ translateY: unibotBounce }],
+              },
+            ]}
+          >
+            <Ionicons name="arrow-down-circle" size={s(34)} color="#60a5fa" />
           </Animated.View>
         )}
 
