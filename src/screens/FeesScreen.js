@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
 
@@ -23,13 +24,13 @@ export default function FeesScreen({ navigation }) {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
+  const { token } = useContext(AuthContext);
   const { colors } = useTheme();
   const [breakdown, setBreakdown] = useState(null);
   const [examPeriod, setExamPeriod] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Loading overlay pulse animation
   const pulseAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (loading) {
@@ -52,15 +53,27 @@ export default function FeesScreen({ navigation }) {
       pulseAnim.setValue(1);
     }
   }, [loading]);
-
   useFocusEffect(
     useCallback(() => {
+      console.log(
+        "FeesScreen useFocusEffect, token:",
+        token ? token.substring(0, 20) : "MISSING",
+      );
+      if (!token) return;
       loadFees();
-    }, []),
+    }, [token]),
   );
 
   const loadFees = async () => {
     try {
+      // Manually ensure token is set before request
+      const AsyncStorage =
+        require("@react-native-async-storage/async-storage").default;
+      const storedToken = await AsyncStorage.getItem("@token");
+      if (storedToken) {
+        api.defaults.headers.Authorization = `Bearer ${storedToken}`;
+      }
+
       const [breakdownRes, examPeriodRes] = await Promise.all([
         api.get("/fees/breakdown"),
         api.get("/exam-period/current").catch(() => ({ data: {} })),
@@ -80,7 +93,6 @@ export default function FeesScreen({ navigation }) {
     setRefreshing(false);
   };
 
-  // If still loading (initial load) show the full-screen overlay
   if (loading) {
     return (
       <Modal visible={loading} transparent animationType="fade">
@@ -146,7 +158,6 @@ export default function FeesScreen({ navigation }) {
     summaryColor = "#4caf50";
   }
 
-  // Exam period accent color
   const epName = examPeriod?.exam_period;
   const epColor = epName
     ? epName.toLowerCase().includes("prelim")
@@ -175,7 +186,6 @@ export default function FeesScreen({ navigation }) {
         />
       }
     >
-      {/* ── Header with Pay Button ── */}
       <LinearGradient
         colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
@@ -196,7 +206,6 @@ export default function FeesScreen({ navigation }) {
           )}
         </View>
 
-        {/* Exam period + semester context */}
         <View style={styles.headerMeta}>
           {epName ? (
             <View
@@ -235,7 +244,6 @@ export default function FeesScreen({ navigation }) {
         </View>
       </LinearGradient>
 
-      {/* ── Summary Card ── */}
       <View
         style={[
           styles.summaryCard,
@@ -258,7 +266,6 @@ export default function FeesScreen({ navigation }) {
             {summaryAmount}
           </Text>
         </View>
-        {/* Grand total pill */}
         {hasFees && (
           <View
             style={[
@@ -278,7 +285,6 @@ export default function FeesScreen({ navigation }) {
         )}
       </View>
 
-      {/* ── No exam period warning ── */}
       {!epName && hasFees && (
         <View
           style={[
@@ -299,7 +305,6 @@ export default function FeesScreen({ navigation }) {
 
       {hasFees ? (
         <>
-          {/* ── Tuition Fees ── */}
           {breakdown?.tuition?.fees?.length > 0 && (
             <FeeSection
               title="Tuition Fees"
@@ -312,7 +317,6 @@ export default function FeesScreen({ navigation }) {
             />
           )}
 
-          {/* ── Miscellaneous Fees ── */}
           {breakdown?.miscellaneous?.fees?.length > 0 && (
             <FeeSection
               title="Miscellaneous Fees"
@@ -325,7 +329,6 @@ export default function FeesScreen({ navigation }) {
             />
           )}
 
-          {/* ── Exam Fees ── */}
           {breakdown?.exam?.fees?.length > 0 && (
             <FeeSection
               title="Exam Fees"
@@ -338,7 +341,6 @@ export default function FeesScreen({ navigation }) {
             />
           )}
 
-          {/* ── Grand Total Footer ── */}
           <View
             style={[
               styles.grandTotalCard,
@@ -417,7 +419,6 @@ export default function FeesScreen({ navigation }) {
   );
 }
 
-// ── Reusable Fee Section ──────────────────────────────────────────────────
 function FeeSection({
   title,
   icon,
@@ -481,9 +482,6 @@ function FeeSection({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" }, // kept for reference, not used
-
-  // Full-screen loading overlay
   loadingOverlay: {
     flex: 1,
     justifyContent: "center",
@@ -502,10 +500,7 @@ const styles = StyleSheet.create({
     shadowRadius: 22,
     elevation: 14,
   },
-  loadingLogo: {
-    width: "100%",
-    height: "100%",
-  },
+  loadingLogo: { width: "100%", height: "100%" },
   loadingText: {
     marginTop: 20,
     fontSize: 18,
@@ -518,8 +513,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "rgba(255,255,255,0.4)",
   },
-
-  // Header
   headerGradient: {
     paddingTop: 60,
     paddingBottom: 30,
@@ -538,11 +531,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#fff",
-  },
+  headerTitle: { fontSize: 28, fontWeight: "bold", color: "#fff" },
   payButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -552,11 +541,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     gap: 6,
   },
-  payButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
+  payButtonText: { color: "#fff", fontSize: 14, fontWeight: "600" },
   headerMeta: {
     flexDirection: "row",
     alignItems: "center",
@@ -579,8 +564,6 @@ const styles = StyleSheet.create({
   },
   epPillText: { fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
   epPillSep: { fontSize: 12, fontWeight: "500" },
-
-  // Warning banner
   warningBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -593,8 +576,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   warningText: { flex: 1, fontSize: 12, color: "#92400e", lineHeight: 17 },
-
-  // Summary Card
   summaryCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -629,8 +610,6 @@ const styles = StyleSheet.create({
   },
   grandTotalLabel: { fontSize: 10, fontWeight: "500", marginBottom: 2 },
   grandTotalValue: { fontSize: 14, fontWeight: "700" },
-
-  // Fee Sections
   section: {
     marginHorizontal: 20,
     marginTop: 20,
@@ -691,8 +670,6 @@ const styles = StyleSheet.create({
   },
   subtotalLabel: { fontSize: 16, fontWeight: "700" },
   subtotalAmount: { fontSize: 16, fontWeight: "700" },
-
-  // Grand Total Footer Card
   grandTotalCard: {
     marginHorizontal: 20,
     marginTop: 20,
@@ -714,8 +691,6 @@ const styles = StyleSheet.create({
   grandTotalDivider: { borderTopWidth: 1, marginVertical: 8 },
   grandTotalFooterLabel: { fontSize: 15, color: "#64748b" },
   grandTotalFooterValue: { fontSize: 16, fontWeight: "700" },
-
-  // Empty State
   emptyContainer: { alignItems: "center", marginTop: 50, marginBottom: 30 },
   emptyText: {
     fontSize: 16,

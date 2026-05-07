@@ -69,6 +69,12 @@ export default function ClearanceScreen({ navigation, setScreenshotMode }) {
 
   const loadData = async () => {
     try {
+      const AsyncStorage =
+        require("@react-native-async-storage/async-storage").default;
+      const storedToken = await AsyncStorage.getItem("@token");
+      if (storedToken) {
+        api.defaults.headers.Authorization = `Bearer ${storedToken}`;
+      }
       const [clearanceRes, breakdownRes, examPeriodRes] = await Promise.all([
         api.get("/clearance"),
         api.get("/fees/breakdown"),

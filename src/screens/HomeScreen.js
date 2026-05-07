@@ -218,7 +218,7 @@ export default function HomeScreen({ navigation }) {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
-  const { user } = useContext(AuthContext);
+  const { user, token } = useContext(AuthContext);
   const { colors } = useTheme();
 
   const [profile, setProfile] = useState(null);
@@ -323,6 +323,8 @@ export default function HomeScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
+      if (!token) return; // ← wait for token before loading
+
       const controller = new AbortController();
       loadData(controller.signal);
       startPolling();
@@ -330,7 +332,7 @@ export default function HomeScreen({ navigation }) {
         controller.abort();
         stopPolling();
       };
-    }, [loadData, startPolling, stopPolling]),
+    }, [token, loadData, startPolling, stopPolling]),
   );
 
   // ── Payment success modal (replaces Alert) ─────────────────────────────
