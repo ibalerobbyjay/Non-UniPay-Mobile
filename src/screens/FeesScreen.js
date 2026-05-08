@@ -1,3 +1,4 @@
+// FeesScreen.js — Updated with OnboardingGuide (screen="fees")
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { BlurView } from "expo-blur";
@@ -15,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import OnboardingGuide from "../components/OnboardingGuide";
 import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
@@ -24,12 +26,45 @@ export default function FeesScreen({ navigation }) {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
-  const { token } = useContext(AuthContext);
+  const { token, user } = useContext(AuthContext);
   const { colors } = useTheme();
   const [breakdown, setBreakdown] = useState(null);
   const [examPeriod, setExamPeriod] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── Onboarding refs ─────────────────────────────────────────────────────
+  const feesHeaderRef = useRef(null);
+  const feesSummaryRef = useRef(null);
+  const feesSectionsRef = useRef(null);
+  const feesTotalRef = useRef(null);
+
+  const refs = {
+    feesHeader: feesHeaderRef,
+    feesSummary: feesSummaryRef,
+    feesSections: feesSectionsRef,
+    feesTotal: feesTotalRef,
+  };
+
+  const scrollViewRef = useRef(null);
+
+  const getElementRect = (key, borderRadius = 20) => {
+    const ref = refs[key];
+    if (ref?.current && typeof ref.current.measureInWindow === "function") {
+      return new Promise((resolve) => {
+        ref.current.measureInWindow((x, y, w, h) => {
+          if (w > 0 && h > 0)
+            resolve({ x, y, width: w, height: h, borderRadius });
+          else resolve(null);
+        });
+      });
+    }
+    return Promise.resolve(null);
+  };
+
+  const scrollToElement = (y) => {
+    scrollViewRef.current?.scrollTo({ y, animated: true });
+  };
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
@@ -53,12 +88,9 @@ export default function FeesScreen({ navigation }) {
       pulseAnim.setValue(1);
     }
   }, [loading]);
+
   useFocusEffect(
     useCallback(() => {
-      console.log(
-        "FeesScreen useFocusEffect, token:",
-        token ? token.substring(0, 20) : "MISSING",
-      );
       if (!token) return;
       loadFees();
     }, [token]),
@@ -66,14 +98,11 @@ export default function FeesScreen({ navigation }) {
 
   const loadFees = async () => {
     try {
-      // Manually ensure token is set before request
       const AsyncStorage =
         require("@react-native-async-storage/async-storage").default;
       const storedToken = await AsyncStorage.getItem("@token");
-      if (storedToken) {
+      if (storedToken)
         api.defaults.headers.Authorization = `Bearer ${storedToken}`;
-      }
-
       const [breakdownRes, examPeriodRes] = await Promise.all([
         api.get("/fees/breakdown"),
         api.get("/exam-period/current").catch(() => ({ data: {} })),
@@ -135,7 +164,6 @@ export default function FeesScreen({ navigation }) {
       ...(breakdown?.miscellaneous?.fees || []),
       ...(breakdown?.exam?.fees || []),
     ].length > 0;
-
   const totalDue = breakdown?.grand_total || 0;
   const totalPaid = breakdown?.total_paid || 0;
   const remainingBalance =
@@ -171,251 +199,287 @@ export default function FeesScreen({ navigation }) {
             : "rgba(255,255,255,0.7)"
     : "rgba(255,255,255,0.5)";
 
-  const handlePayPress = () => {
-    navigation.navigate("Payment");
-  };
-
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={colors.brand}
-        />
-      }
-    >
-      <LinearGradient
-        colors={[colors.gradientStart, colors.gradientEnd]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerGradient}
+    <>
+      <ScrollView
+        ref={scrollViewRef}
+        style={[styles.container, { backgroundColor: colors.background }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brand}
+          />
+        }
       >
-        <View style={styles.headerRow}>
-          <Text style={styles.headerTitle}>School Fees</Text>
-          {hasFees && (
-            <TouchableOpacity
-              style={styles.payButton}
-              onPress={handlePayPress}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="card-outline" size={20} color="#fff" />
-              <Text style={styles.payButtonText}>Pay</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        {/* ── Header ── */}
 
-        <View style={styles.headerMeta}>
-          {epName ? (
+        <LinearGradient
+          ref={feesHeaderRef}
+          collapsable={false}
+          colors={[colors.gradientStart, colors.gradientEnd]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerRow}>
+            <Text style={styles.headerTitle}>School Fees</Text>
+            {hasFees && (
+              <TouchableOpacity
+                style={styles.payButton}
+                onPress={() => navigation.navigate("Payment")}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="card-outline" size={20} color="#fff" />
+                <Text style={styles.payButtonText}>Pay</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.headerMeta}>
+            {epName ? (
+              <View
+                style={[
+                  styles.epPill,
+                  {
+                    backgroundColor: `${epColor}30`,
+                    borderColor: `${epColor}60`,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="time-outline"
+                  size={12}
+                  color={epColor}
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={[styles.epPillText, { color: epColor }]}>
+                  {epName}
+                </Text>
+                {examPeriod?.semester && (
+                  <Text style={[styles.epPillSep, { color: epColor }]}>
+                    {" · "}
+                    {examPeriod.semester}
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <Text style={styles.headerSubtitle}>Current Academic Year</Text>
+            )}
+            {examPeriod?.school_year && (
+              <Text style={styles.headerSchoolYear}>
+                {examPeriod.school_year}
+              </Text>
+            )}
+          </View>
+        </LinearGradient>
+
+        {/* ── Summary Card ── */}
+        <View
+          ref={feesSummaryRef}
+          style={[
+            styles.summaryCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={[
+              styles.summaryIconContainer,
+              { backgroundColor: summaryColor + "20" },
+            ]}
+          >
+            <Ionicons name={summaryIcon} size={32} color={summaryColor} />
+          </View>
+          <View style={styles.summaryTextContainer}>
+            <Text
+              style={[styles.summaryLabel, { color: colors.textSecondary }]}
+            >
+              {summaryLabel}
+            </Text>
+            <Text style={[styles.summaryAmount, { color: summaryColor }]}>
+              {summaryAmount}
+            </Text>
+          </View>
+          {hasFees && (
             <View
               style={[
-                styles.epPill,
+                styles.grandTotalPill,
                 {
-                  backgroundColor: `${epColor}30`,
-                  borderColor: `${epColor}60`,
+                  backgroundColor: colors.surfaceSecondary ?? colors.background,
                 },
               ]}
             >
-              <Ionicons
-                name="time-outline"
-                size={12}
-                color={epColor}
-                style={{ marginRight: 4 }}
-              />
-              <Text style={[styles.epPillText, { color: epColor }]}>
-                {epName}
-              </Text>
-              {examPeriod?.semester && (
-                <Text style={[styles.epPillSep, { color: epColor }]}>
-                  {" · "}
-                  {examPeriod.semester}
-                </Text>
-              )}
-            </View>
-          ) : (
-            <Text style={styles.headerSubtitle}>Current Academic Year</Text>
-          )}
-          {examPeriod?.school_year && (
-            <Text style={styles.headerSchoolYear}>
-              {examPeriod.school_year}
-            </Text>
-          )}
-        </View>
-      </LinearGradient>
-
-      <View
-        style={[
-          styles.summaryCard,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-      >
-        <View
-          style={[
-            styles.summaryIconContainer,
-            { backgroundColor: summaryColor + "20" },
-          ]}
-        >
-          <Ionicons name={summaryIcon} size={32} color={summaryColor} />
-        </View>
-        <View style={styles.summaryTextContainer}>
-          <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
-            {summaryLabel}
-          </Text>
-          <Text style={[styles.summaryAmount, { color: summaryColor }]}>
-            {summaryAmount}
-          </Text>
-        </View>
-        {hasFees && (
-          <View
-            style={[
-              styles.grandTotalPill,
-              { backgroundColor: colors.surfaceSecondary ?? colors.background },
-            ]}
-          >
-            <Text style={[styles.grandTotalLabel, { color: colors.textMuted }]}>
-              Total
-            </Text>
-            <Text
-              style={[styles.grandTotalValue, { color: colors.textPrimary }]}
-            >
-              ₱{totalDue.toLocaleString()}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {!epName && hasFees && (
-        <View
-          style={[
-            styles.warningBanner,
-            { backgroundColor: "#fef9c3", borderColor: "#fde047" },
-          ]}
-        >
-          <Ionicons
-            name="information-circle-outline"
-            size={16}
-            color="#ca8a04"
-          />
-          <Text style={styles.warningText}>
-            No exam period is currently active. Showing semester-wide fees only.
-          </Text>
-        </View>
-      )}
-
-      {hasFees ? (
-        <>
-          {breakdown?.tuition?.fees?.length > 0 && (
-            <FeeSection
-              title="Tuition Fees"
-              icon="school-outline"
-              iconBg={colors.brand}
-              iconColor="#fff"
-              fees={breakdown.tuition.fees}
-              subtotal={breakdown.tuition.total}
-              colors={colors}
-            />
-          )}
-
-          {breakdown?.miscellaneous?.fees?.length > 0 && (
-            <FeeSection
-              title="Miscellaneous Fees"
-              icon="document-text-outline"
-              iconBg="rgb(244, 180, 20)"
-              iconColor="#0f3c91"
-              fees={breakdown.miscellaneous.fees}
-              subtotal={breakdown.miscellaneous.total}
-              colors={colors}
-            />
-          )}
-
-          {breakdown?.exam?.fees?.length > 0 && (
-            <FeeSection
-              title="Exam Fees"
-              icon="create-outline"
-              iconBg={colors.brand}
-              iconColor="#fff"
-              fees={breakdown.exam.fees}
-              subtotal={breakdown.exam.total}
-              colors={colors}
-            />
-          )}
-
-          <View
-            style={[
-              styles.grandTotalCard,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <View style={styles.grandTotalRow}>
               <Text
-                style={[
-                  styles.grandTotalFooterLabel,
-                  { color: colors.textSecondary },
-                ]}
+                style={[styles.grandTotalLabel, { color: colors.textMuted }]}
               >
-                Grand Total
+                Total
               </Text>
               <Text
-                style={[styles.grandTotalFooterValue, { color: colors.brand }]}
+                style={[styles.grandTotalValue, { color: colors.textPrimary }]}
               >
                 ₱{totalDue.toLocaleString()}
               </Text>
             </View>
-            <View style={styles.grandTotalRow}>
-              <Text
-                style={[
-                  styles.grandTotalFooterLabel,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                Total Paid
-              </Text>
-              <Text
-                style={[styles.grandTotalFooterValue, { color: "#22c55e" }]}
-              >
-                ₱{parseFloat(totalPaid).toLocaleString()}
-              </Text>
-            </View>
-            <View
-              style={[styles.grandTotalDivider, { borderColor: colors.border }]}
+          )}
+        </View>
+
+        {!epName && hasFees && (
+          <View
+            style={[
+              styles.warningBanner,
+              { backgroundColor: "#fef9c3", borderColor: "#fde047" },
+            ]}
+          >
+            <Ionicons
+              name="information-circle-outline"
+              size={16}
+              color="#ca8a04"
             />
-            <View style={styles.grandTotalRow}>
-              <Text
+            <Text style={styles.warningText}>
+              No exam period is currently active. Showing semester-wide fees
+              only.
+            </Text>
+          </View>
+        )}
+
+        {/* ── Fee Sections ── */}
+        {hasFees ? (
+          <>
+            <View ref={refs.feesSections} collapsable={false}>
+              {breakdown?.tuition?.fees?.length > 0 && (
+                <FeeSection
+                  title="Tuition Fees"
+                  icon="school-outline"
+                  iconBg={colors.brand}
+                  iconColor="#fff"
+                  fees={breakdown.tuition.fees}
+                  subtotal={breakdown.tuition.total}
+                  colors={colors}
+                />
+              )}
+              {breakdown?.miscellaneous?.fees?.length > 0 && (
+                <FeeSection
+                  title="Miscellaneous Fees"
+                  icon="document-text-outline"
+                  iconBg="rgb(244, 180, 20)"
+                  iconColor="#0f3c91"
+                  fees={breakdown.miscellaneous.fees}
+                  subtotal={breakdown.miscellaneous.total}
+                  colors={colors}
+                />
+              )}
+              {breakdown?.exam?.fees?.length > 0 && (
+                <FeeSection
+                  title="Exam Fees"
+                  icon="create-outline"
+                  iconBg={colors.brand}
+                  iconColor="#fff"
+                  fees={breakdown.exam.fees}
+                  subtotal={breakdown.exam.total}
+                  colors={colors}
+                />
+              )}
+            </View>
+
+            {/* ── Grand Total ── */}
+            <View ref={refs.feesTotal} collapsable={false}>
+              <View
                 style={[
-                  styles.grandTotalFooterLabel,
-                  { color: colors.textPrimary, fontWeight: "700" },
-                ]}
-              >
-                Balance Due
-              </Text>
-              <Text
-                style={[
-                  styles.grandTotalFooterValue,
+                  styles.grandTotalCard,
                   {
-                    color: remainingBalance === 0 ? "#22c55e" : "#ef4444",
-                    fontSize: 20,
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
                   },
                 ]}
               >
-                ₱{remainingBalance.toLocaleString()}
-              </Text>
+                <View style={styles.grandTotalRow}>
+                  <Text
+                    style={[
+                      styles.grandTotalFooterLabel,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    Grand Total
+                  </Text>
+                  <Text
+                    style={[
+                      styles.grandTotalFooterValue,
+                      { color: colors.brand },
+                    ]}
+                  >
+                    ₱{totalDue.toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.grandTotalRow}>
+                  <Text
+                    style={[
+                      styles.grandTotalFooterLabel,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    Total Paid
+                  </Text>
+                  <Text
+                    style={[styles.grandTotalFooterValue, { color: "#22c55e" }]}
+                  >
+                    ₱{parseFloat(totalPaid).toLocaleString()}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.grandTotalDivider,
+                    { borderColor: colors.border },
+                  ]}
+                />
+                <View style={styles.grandTotalRow}>
+                  <Text
+                    style={[
+                      styles.grandTotalFooterLabel,
+                      { color: colors.textPrimary, fontWeight: "700" },
+                    ]}
+                  >
+                    Balance Due
+                  </Text>
+                  <Text
+                    style={[
+                      styles.grandTotalFooterValue,
+                      {
+                        color: remainingBalance === 0 ? "#22c55e" : "#ef4444",
+                        fontSize: 20,
+                      },
+                    ]}
+                  >
+                    ₱{remainingBalance.toLocaleString()}
+                  </Text>
+                </View>
+              </View>
             </View>
+          </>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Ionicons
+              name="receipt-outline"
+              size={60}
+              color={colors.textMuted}
+            />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+              {epName
+                ? `No fees set for ${epName} this semester.`
+                : "No fees have been set for this semester."}
+            </Text>
           </View>
-        </>
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="receipt-outline" size={60} color={colors.textMuted} />
-          <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-            {epName
-              ? `No fees set for ${epName} this semester.`
-              : "No fees have been set for this semester."}
-          </Text>
-        </View>
-      )}
+        )}
 
-      <View style={{ height: 30 }} />
-    </ScrollView>
+        <View style={{ height: 30 }} />
+      </ScrollView>
+
+      {/* ── Onboarding Guide ── */}
+      <OnboardingGuide
+        screen="fees"
+        userId={user?.id}
+        getElementRect={getElementRect}
+        scrollToElement={scrollToElement}
+      />
+    </>
   );
 }
 
@@ -445,7 +509,6 @@ function FeeSection({
           {title}
         </Text>
       </View>
-
       {fees.map((fee) => (
         <View
           key={fee.id}
@@ -467,7 +530,6 @@ function FeeSection({
           </Text>
         </View>
       ))}
-
       <View style={[styles.subtotalRow, { borderTopColor: colors.border }]}>
         <Text style={[styles.subtotalLabel, { color: colors.textPrimary }]}>
           Subtotal
@@ -482,11 +544,7 @@ function FeeSection({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loadingOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  loadingOverlay: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingLogoRing: {
     width: 110,
     height: 110,

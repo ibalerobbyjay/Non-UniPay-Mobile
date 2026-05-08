@@ -5,17 +5,30 @@ import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import uniBotImage from "../../assets/unibot.png";
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
+
+// ─── PERSISTED MESSAGES (survives navigation) ─────────────────────
+let persistedMessages = [
+  {
+    id: "welcome",
+    role: "assistant",
+    content:
+      "Hi! I'm UniBot 👋 I can help you with anything about the UniPay app — fees, payments, clearance, and more. What would you like to know?",
+  },
+];
 
 // ─── MESSAGE BUBBLE ───────────────────────────────────────────────
 function MessageBubble({ message, colors, onLongPress }) {
@@ -31,7 +44,10 @@ function MessageBubble({ message, colors, onLongPress }) {
     >
       {!isUser && (
         <View style={styles.botAvatar}>
-          <Text style={styles.botAvatarText}>U</Text>
+          <Image
+            source={uniBotImage}
+            style={{ width: 32, height: 32, borderRadius: 16 }}
+          />
         </View>
       )}
       <View
@@ -86,18 +102,10 @@ const SUGGESTIONS = [
   "Who are the developers of this app?",
 ];
 
-// ─── CHATBOT SCREEN ─────────────────────────────────────────────
 export default function ChatbotScreen({ navigation }) {
   const { colors } = useTheme();
 
-  const [messages, setMessages] = useState([
-    {
-      id: "welcome",
-      role: "assistant",
-      content:
-        "Hi! I'm UniBot 👋 I can help you with anything about the UniPay app — fees, payments, clearance, and more. What would you like to know?",
-    },
-  ]);
+  const [messages, setMessages] = useState(persistedMessages);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState(null);
@@ -105,28 +113,106 @@ export default function ChatbotScreen({ navigation }) {
   const [editingId, setEditingId] = useState(null);
 
   const flatListRef = useRef(null);
+  const scrollViewRef = useRef(null);
+  const autoScrollInterval = useRef(null);
+  const currentOffsetRef = useRef(0); // always fresh
+  const directionRef = useRef(1); // 1 = right, -1 = left
 
+  // Auto‑scroll measurements
+  const [contentWidth, setContentWidth] = useState(0);
+  const [viewWidth, setViewWidth] = useState(0);
+  const [isAutoScrollingEnabled, setIsAutoScrollingEnabled] = useState(true);
+
+  // ─── HEADER / MESSAGE SCROLL ─────────────────────────────────
   useEffect(() => {
     if (navigation) navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
-  // ─── AUTO-SCROLL ONLY WHEN A NEW MESSAGE IS ADDED ──────────────
   useEffect(() => {
-    // Scroll to bottom whenever the total number of messages changes
-    // (new user message or bot reply). Reactions do NOT change the length.
     if (flatListRef.current) {
       flatListRef.current.scrollToEnd({ animated: true });
     }
   }, [messages.length]);
+
+  // ─── AUTO‑SCROLL LOGIC (using refs to avoid stale state) ──────
+  const startAutoScroll = () => {
+    if (autoScrollInterval.current) clearInterval(autoScrollInterval.current);
+    if (!isAutoScrollingEnabled) return;
+
+    autoScrollInterval.current = setInterval(() => {
+      if (!scrollViewRef.current) return;
+      const maxScroll = contentWidth - viewWidth;
+      if (maxScroll <= 0) return;
+
+      let newOffset = currentOffsetRef.current + directionRef.current;
+      let newDirection = directionRef.current;
+
+      if (newOffset >= maxScroll) {
+        newOffset = maxScroll;
+        newDirection = -1;
+      } else if (newOffset <= 0) {
+        newOffset = 0;
+        newDirection = 1;
+      }
+
+      if (newDirection !== directionRef.current)
+        directionRef.current = newDirection;
+      if (newOffset !== currentOffsetRef.current) {
+        scrollViewRef.current.scrollTo({ x: newOffset, animated: false });
+        currentOffsetRef.current = newOffset;
+      }
+    }, 16); // 1px per frame → smooth & slow
+  };
+
+  const stopAutoScroll = () => {
+    if (autoScrollInterval.current) {
+      clearInterval(autoScrollInterval.current);
+      autoScrollInterval.current = null;
+    }
+  };
+
+  // Start/stop based on suggestions visibility
+  useEffect(() => {
+    if (messages.length === 1 && contentWidth > viewWidth && viewWidth > 0) {
+      setIsAutoScrollingEnabled(true);
+      startAutoScroll();
+    } else {
+      stopAutoScroll();
+    }
+    return () => stopAutoScroll();
+  }, [messages.length, contentWidth, viewWidth]);
+
+  // Pause on user touch, resume after 3 seconds
+  const handleUserInteraction = () => {
+    if (!isAutoScrollingEnabled) return;
+    stopAutoScroll();
+    setTimeout(() => {
+      if (messages.length === 1 && contentWidth > viewWidth && viewWidth > 0) {
+        startAutoScroll();
+      }
+    }, 3000);
+  };
+
+  const onScroll = (event) => {
+    currentOffsetRef.current = event.nativeEvent.contentOffset.x;
+  };
+
+  // ─── HELPER: update state AND persist ─────────────────────────
+  const updateMessages = (updater) => {
+    setMessages((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      persistedMessages = next;
+      return next;
+    });
+  };
 
   // ─── SEND MESSAGE ─────────────────────────────────────────────
   const sendMessage = async (text) => {
     const userText = (text || input).trim();
     if (!userText || loading) return;
 
-    // If editing existing message
     if (editingId) {
-      setMessages((prev) =>
+      updateMessages((prev) =>
         prev.map((m) => (m.id === editingId ? { ...m, content: userText } : m)),
       );
       setEditingId(null);
@@ -140,6 +226,7 @@ export default function ChatbotScreen({ navigation }) {
       content: userText,
     };
     const newMessages = [...messages, userMsg];
+    persistedMessages = newMessages;
     setMessages(newMessages);
     setInput("");
     setLoading(true);
@@ -152,7 +239,7 @@ export default function ChatbotScreen({ navigation }) {
       const res = await api.post("/chatbot", { messages: history });
       const reply =
         res.data?.reply || "I didn't get a response. Please try again.";
-      setMessages((prev) => [
+      updateMessages((prev) => [
         ...prev,
         {
           id: Date.now().toString() + "_bot",
@@ -161,7 +248,13 @@ export default function ChatbotScreen({ navigation }) {
         },
       ]);
     } catch (err) {
-      setMessages((prev) => [
+      console.log(
+        "Chatbot error:",
+        err?.response?.status,
+        err?.response?.data,
+        err?.message,
+      );
+      updateMessages((prev) => [
         ...prev,
         {
           id: Date.now().toString() + "_err",
@@ -194,7 +287,7 @@ export default function ChatbotScreen({ navigation }) {
   };
 
   const reactMessage = (emoji) => {
-    setMessages((prev) =>
+    updateMessages((prev) =>
       prev.map((m) =>
         m.id === selectedMessage.id ? { ...m, reaction: emoji } : m,
       ),
@@ -208,16 +301,27 @@ export default function ChatbotScreen({ navigation }) {
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      {/* HEADER */}
+      {/* HEADER (unchanged) */}
       <LinearGradient
         colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+
         <View style={styles.headerCenter}>
           <View style={styles.headerAvatar}>
-            <Text style={styles.headerAvatarText}>U</Text>
+            <Image
+              source={uniBotImage}
+              style={{ width: 42, height: 42, borderRadius: 21 }}
+            />
           </View>
           <View>
             <Text style={styles.headerTitle}>UniBot</Text>
@@ -226,10 +330,12 @@ export default function ChatbotScreen({ navigation }) {
         </View>
       </LinearGradient>
 
-      {/* MESSAGES */}
+      {/* MESSAGES FlatList (unchanged) */}
       <FlatList
         ref={flatListRef}
         data={messages}
+        nestedScrollEnabled={true}
+        scrollEventThrottle={16}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <MessageBubble
@@ -239,12 +345,15 @@ export default function ChatbotScreen({ navigation }) {
           />
         )}
         contentContainerStyle={styles.messageList}
-        // REMOVED onContentSizeChange and onLayout – they were causing unwanted scrolls
+        keyboardShouldPersistTaps="handled"
         ListFooterComponent={
           loading ? (
             <View style={styles.typingIndicator}>
               <View style={styles.botAvatar}>
-                <Text style={styles.botAvatarText}>U</Text>
+                <Image
+                  source={uniBotImage}
+                  style={{ width: 32, height: 32, borderRadius: 16 }}
+                />
               </View>
               <View
                 style={[
@@ -267,37 +376,52 @@ export default function ChatbotScreen({ navigation }) {
         }
       />
 
-      {/* SUGGESTION CHIPS */}
+      {/* SUGGESTION CHIPS with auto‑scroll (fixed) */}
       {messages.length === 1 && (
         <View style={styles.suggestionsContainer}>
-          <FlatList
+          <ScrollView
+            ref={scrollViewRef}
             horizontal
-            showsHorizontalScrollIndicator={false}
-            data={SUGGESTIONS}
-            keyExtractor={(item) => item}
+            showsHorizontalScrollIndicator={true}
+            nestedScrollEnabled={true}
+            scrollEnabled={true}
+            alwaysBounceHorizontal={true}
+            overScrollMode="always"
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.suggestionsList}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.brand,
-                  },
-                ]}
-                onPress={() => sendMessage(item)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.chipText, { color: colors.brand }]}>
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            )}
-          />
+            onLayout={(e) => setViewWidth(e.nativeEvent.layout.width)}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            onTouchStart={handleUserInteraction}
+          >
+            <View
+              onLayout={(e) => setContentWidth(e.nativeEvent.layout.width)}
+              style={{ flexDirection: "row", gap: 8 }}
+            >
+              {SUGGESTIONS.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.brand,
+                    },
+                  ]}
+                  onPress={() => sendMessage(item)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.chipText, { color: colors.brand }]}>
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
         </View>
       )}
 
-      {/* INPUT BAR */}
+      {/* INPUT BAR (unchanged) */}
       <View
         style={[
           styles.inputBar,
@@ -348,7 +472,7 @@ export default function ChatbotScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* LONG PRESS ACTION MODAL */}
+      {/* LONG PRESS ACTION MODAL (unchanged) */}
       <Modal transparent visible={actionVisible} animationType="fade">
         <TouchableOpacity
           style={styles.modalOverlay}
@@ -399,7 +523,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
-  backBtn: { marginRight: 8, padding: 4 },
+  backBtn: {
+    marginRight: 12,
+    padding: 4,
+  },
   headerCenter: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerAvatar: {
     width: 42,
@@ -435,12 +562,8 @@ const styles = StyleSheet.create({
     maxWidth: "75%",
     flexDirection: "column",
   },
-  messageWrapperBot: {
-    alignItems: "flex-start",
-  },
-  messageWrapperUser: {
-    alignItems: "flex-end",
-  },
+  messageWrapperBot: { alignItems: "flex-start" },
+  messageWrapperUser: { alignItems: "flex-end" },
   bubble: {
     borderRadius: 18,
     paddingHorizontal: 14,
@@ -453,20 +576,14 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   bubbleText: { fontSize: 15, lineHeight: 22 },
-  reaction: {
-    fontSize: 16,
-    marginTop: 4,
-  },
-  reactionBot: {
-    textAlign: "left",
-  },
-  reactionUser: {
-    textAlign: "right",
-  },
+  reaction: { fontSize: 16, marginTop: 4 },
+  reactionBot: { textAlign: "left" },
+  reactionUser: { textAlign: "right" },
   typingIndicator: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 12,
+    paddingHorizontal: 16,
   },
   typingBubble: {
     flexDirection: "row",
@@ -480,8 +597,15 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   typingText: { fontSize: 14 },
-  suggestionsContainer: { paddingVertical: 10 },
-  suggestionsList: { paddingHorizontal: 16, gap: 8 },
+  suggestionsContainer: {
+    paddingVertical: 10,
+  },
+  suggestionsList: {
+    paddingHorizontal: 16,
+    gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
   chip: {
     borderWidth: 1.5,
     borderRadius: 20,

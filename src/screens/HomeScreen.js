@@ -1,9 +1,30 @@
+// HomeScreen.js — Updated with OnboardingGuide (screen="home")
+// Key change: pass screen="home" to OnboardingGuide (already working, just ensure refs are correct)
+// The OnboardingGuide import path and usage remains the same.
+// Replace your existing OnboardingGuide usage at the bottom of HomeScreen with:
+
+/*
+  <OnboardingGuide
+    screen="home"
+    userId={user?.id}
+    userName={user?.name}
+    getElementRect={getElementRect}
+    scrollToElement={scrollToElement}
+  />
+*/
+
+// The refs object and getElementRect function remain the same as your existing HomeScreen.js.
+// No other changes needed to HomeScreen.js — it already has all the correct refs.
+
+// ── FULL HomeScreen.js ────────────────────────────────────────────────────────
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Dimensions,
+  Easing,
   Image,
   Modal,
   RefreshControl,
@@ -13,10 +34,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import uniBotImage from "../../assets/unibot.png";
 import OnboardingGuide from "../components/OnboardingGuide";
 import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
-import api, { getImageUrl } from "../services/api"; // <-- UPDATED: import getImageUrl
+import api, { getImageUrl } from "../services/api";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 40;
@@ -228,7 +250,7 @@ export default function HomeScreen({ navigation }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
-  const [modalVisible, setModalVisible] = useState(false); // Modal visibility state
+  const [modalVisible, setModalVisible] = useState(false);
 
   // ── Refs for onboarding measurements ───────────────────────────────────
   const refs = {
@@ -240,7 +262,6 @@ export default function HomeScreen({ navigation }) {
     history: useRef(null),
   };
 
-  // ── Function to get current rectangle of an element by key ─────────────
   const getElementRect = (key, borderRadius = 20) => {
     const ref = refs[key];
     if (ref?.current && typeof ref.current.measureInWindow === "function") {
@@ -267,14 +288,11 @@ export default function HomeScreen({ navigation }) {
   const pollTimer = useRef(null);
   const TOTAL_CARDS = 3;
 
-  // ── Scroll ref for main ScrollView ─────────────────────────────────────
   const scrollViewRef = useRef(null);
-
   const scrollToElement = (y) => {
     scrollViewRef.current?.scrollTo({ y, animated: true });
   };
 
-  // ── Core loader ───────────────────────────────────────────────────────
   const loadData = useCallback(async (signal) => {
     if (isFetching.current) return;
     isFetching.current = true;
@@ -308,7 +326,6 @@ export default function HomeScreen({ navigation }) {
     }
   }, []);
 
-  // ── Polling ───────────────────────────────────────────────────────────
   const stopPolling = useCallback(() => {
     if (pollTimer.current) {
       clearInterval(pollTimer.current);
@@ -323,8 +340,7 @@ export default function HomeScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      if (!token) return; // ← wait for token before loading
-
+      if (!token) return;
       const controller = new AbortController();
       loadData(controller.signal);
       startPolling();
@@ -332,10 +348,9 @@ export default function HomeScreen({ navigation }) {
         controller.abort();
         stopPolling();
       };
-    }, [token, loadData, startPolling, stopPolling]),
+    }, [token, loadData, startPolling, stopPolling, route.params?.refresh]),
   );
 
-  // ── Payment success modal (replaces Alert) ─────────────────────────────
   useFocusEffect(
     useCallback(() => {
       if (route.params?.paymentSuccess && !modalVisible) {
@@ -344,7 +359,6 @@ export default function HomeScreen({ navigation }) {
     }, [route.params?.paymentSuccess, modalVisible]),
   );
 
-  // ── Auto-swipe ────────────────────────────────────────────────────────
   const startAutoSwipe = useCallback(() => {
     if (autoSwipeTimer.current) clearInterval(autoSwipeTimer.current);
     autoSwipeTimer.current = setInterval(() => {
@@ -373,21 +387,18 @@ export default function HomeScreen({ navigation }) {
     };
   }, [startAutoSwipe]);
 
-  // ── Pull-to-refresh ───────────────────────────────────────────────────
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
   };
 
-  // ── Derived values ────────────────────────────────────────────────────
   const hasFees =
     [
       ...(breakdown?.tuition?.fees || []),
       ...(breakdown?.miscellaneous?.fees || []),
       ...(breakdown?.exam?.fees || []),
     ].length > 0;
-
   const totalDue = breakdown?.grand_total || 0;
   const totalPaid = parseFloat(breakdown?.total_paid || 0);
   const remainingBalance =
@@ -418,7 +429,6 @@ export default function HomeScreen({ navigation }) {
 
   const epAccent = examPeriodAccent(examPeriod?.exam_period);
 
-  // Quick-action rows — UniBot is in the nav tab, removed from here
   const quickActions = [
     {
       refKey: "fees",
@@ -452,10 +462,47 @@ export default function HomeScreen({ navigation }) {
     },
   ];
 
-  // ── Compute avatar URL once ─────────────────────────────────────────────
   const avatarUri = getImageUrl(profile?.profile_picture);
 
-  // ── Render ────────────────────────────────────────────────────────────
+  const uniBotScale = useRef(new Animated.Value(1)).current;
+  const uniBotBounce = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const bounce = Animated.loop(
+      Animated.sequence([
+        Animated.timing(uniBotBounce, {
+          toValue: -8,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(uniBotBounce, {
+          toValue: 0,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    bounce.start();
+    return () => bounce.stop();
+  }, []);
+
+  const handleUniBotPress = () => {
+    Animated.sequence([
+      Animated.spring(uniBotScale, {
+        toValue: 0.85,
+        useNativeDriver: true,
+        bounciness: 15,
+      }),
+      Animated.spring(uniBotScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        bounciness: 15,
+      }),
+    ]).start(() => navigation.navigate("ChatbotScreen"));
+  };
+
   return (
     <>
       <ScrollView
@@ -866,10 +913,7 @@ export default function HomeScreen({ navigation }) {
         animationType="fade"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={() => {
-          // For Android back button, we just close the modal without triggering actions
-          setModalVisible(false);
-        }}
+        onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View
@@ -888,8 +932,8 @@ export default function HomeScreen({ navigation }) {
               style={[styles.modalButton, { backgroundColor: colors.brand }]}
               onPress={() => {
                 setModalVisible(false);
-                loadData(); // Refresh data after payment
-                navigation.setParams({ paymentSuccess: false }); // Clear the param
+                loadData();
+                navigation.setParams({ paymentSuccess: false });
               }}
             >
               <Text style={styles.modalButtonText}>OK</Text>
@@ -898,8 +942,28 @@ export default function HomeScreen({ navigation }) {
         </View>
       </Modal>
 
+      {/* ── UniBot Floating Button ── */}
+      <Animated.View
+        style={[
+          styles.uniBotFloat,
+          { transform: [{ translateY: uniBotBounce }, { scale: uniBotScale }] },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={handleUniBotPress}
+          activeOpacity={1}
+          style={styles.uniBotTouchable}
+        >
+          <Image source={uniBotImage} style={styles.uniBotFloatImage} />
+          <View style={styles.uniBotLabel}>
+            <Text style={styles.uniBotLabelText}>Ask me!</Text>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+
       {/* ── Onboarding Guide ── */}
       <OnboardingGuide
+        screen="home"
         userId={user?.id}
         userName={user?.name}
         getElementRect={getElementRect}
@@ -909,7 +973,6 @@ export default function HomeScreen({ navigation }) {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerGradient: {
@@ -995,7 +1058,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgb(244,180,20)",
   },
-
   clearanceCard: {
     marginTop: -20,
     marginHorizontal: 20,
@@ -1039,7 +1101,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
   },
-
   summaryCardsContainer: { marginTop: 20, marginBottom: 6 },
   summaryCardsScroll: { paddingHorizontal: 20, gap: 16 },
   summaryCard: {
@@ -1116,7 +1177,6 @@ const styles = StyleSheet.create({
   dot: { borderRadius: 4, height: 7 },
   dotActive: { width: 22 },
   dotInactive: { width: 7, opacity: 0.4 },
-
   quickActions: { padding: 20 },
   sectionTitle: {
     fontSize: 22,
@@ -1152,8 +1212,6 @@ const styles = StyleSheet.create({
   actionInfo: { flex: 1, marginLeft: 16 },
   actionTitle: { fontSize: 17, fontWeight: "600", marginBottom: 2 },
   actionSubtitle: { fontSize: 14 },
-
-  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -1177,11 +1235,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
   },
-  modalMessage: {
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: 24,
-  },
+  modalMessage: { fontSize: 16, textAlign: "center", marginBottom: 24 },
   modalButton: {
     paddingVertical: 12,
     paddingHorizontal: 24,
@@ -1189,9 +1243,32 @@ const styles = StyleSheet.create({
     minWidth: 100,
     alignItems: "center",
   },
-  modalButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
+  modalButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  uniBotFloat: {
+    position: "absolute",
+    bottom: 30,
+    right: 20,
+    alignItems: "center",
+    elevation: 10,
+    shadowColor: "#0f3c91",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
   },
+  uniBotTouchable: { alignItems: "center" },
+  uniBotFloatImage: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    borderWidth: 2.5,
+    borderColor: "rgb(244,180,20)",
+  },
+  uniBotLabel: {
+    marginTop: 4,
+    backgroundColor: "rgb(244,180,20)",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  uniBotLabelText: { fontSize: 10, fontWeight: "700", color: "#0f3c91" },
 });

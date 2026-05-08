@@ -137,13 +137,12 @@ function SplashScreen() {
 /* ─────────────────────────────────────────────
    Animated UniBot Button
 ───────────────────────────────────────────── */
-function UniBotTabButton({ onPress, accessibilityState }) {
+function PayTabButton({ onPress, accessibilityState }) {
   const { colors } = useTheme();
   const focused = accessibilityState?.selected;
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.6)).current;
-  const spinAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -195,21 +194,8 @@ function UniBotTabButton({ onPress, accessibilityState }) {
           bounciness: 8,
         }),
       ]).start();
-
-      spinAnim.setValue(0);
-      Animated.timing(spinAnim, {
-        toValue: 1,
-        duration: 500,
-        easing: Easing.out(Easing.back(1.5)),
-        useNativeDriver: true,
-      }).start();
     }
   }, [focused]);
-
-  const spin = spinAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
-  });
 
   return (
     <TouchableOpacity
@@ -221,7 +207,7 @@ function UniBotTabButton({ onPress, accessibilityState }) {
         style={[
           styles.pulseRing,
           {
-            borderColor: colors.brand,
+            borderColor: "rgb(244,180,20)",
             transform: [{ scale: pulseAnim }],
             opacity: pulseOpacity,
           },
@@ -237,18 +223,11 @@ function UniBotTabButton({ onPress, accessibilityState }) {
           },
         ]}
       >
-        <Animated.View style={{ transform: [{ rotate: spin }] }}>
-          <Ionicons
-            name="chatbubble-ellipses"
-            size={28}
-            color={focused ? "#fff" : "#0f3c91"}
-          />
-        </Animated.View>
+        <Ionicons name="card" size={28} color={focused ? "#fff" : "#0f3c91"} />
       </Animated.View>
     </TouchableOpacity>
   );
 }
-
 /* ─────────────────────────────────────────────
    Tab Navigator
 ───────────────────────────────────────────── */
@@ -301,17 +280,18 @@ function TabNavigator({ screenshotMode, setScreenshotMode }) {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Fees" component={FeesScreen} />
       <Tab.Screen
-        name="Chatbot"
-        component={ChatbotScreen}
+        name="Pay"
+        component={PaymentScreen}
         options={{
-          tabBarLabel: "UniBot",
+          tabBarLabel: "Pay",
           tabBarLabelStyle: {
             fontSize: 11,
             fontWeight: "700",
             color: "rgb(244,180,20)",
             marginTop: 2,
           },
-          tabBarButton: (props) => <UniBotTabButton {...props} />,
+          tabBarButton: (props) => <PayTabButton {...props} />,
+          tabBarStyle: { display: "none" },
         }}
       />
       <Tab.Screen name="Clearance">
@@ -421,6 +401,12 @@ export default function AppNavigator() {
               />
             )}
           </Stack.Screen>
+
+          <Stack.Screen
+            name="ChatbotScreen"
+            component={ChatbotScreen}
+            options={{ headerShown: false }}
+          />
           <Stack.Screen
             name="Payment"
             component={PaymentScreen}

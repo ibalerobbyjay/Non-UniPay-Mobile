@@ -214,6 +214,12 @@ export default function NotificationsScreen() {
       };
     }, []),
   );
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", () => {
+      navigation.getParent()?.setParams({ refresh: Date.now() });
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -422,7 +428,9 @@ export default function NotificationsScreen() {
         <View style={styles.headerRow}>
           <TouchableOpacity
             onPress={
-              selectionMode ? exitSelectionMode : () => navigation.goBack()
+              selectionMode
+                ? exitSelectionMode
+                : () => navigation.navigate("Home", { refresh: Date.now() })
             }
             style={styles.backButton}
           >

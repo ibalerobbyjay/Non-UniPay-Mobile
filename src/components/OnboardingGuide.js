@@ -1,9 +1,14 @@
+// OnboardingGuide.js — Universal onboarding component with UniBot mascot
+// Supports: home, fees, clearance, profile screens
+// Usage: <OnboardingGuide screen="home" userId={...} userName={...} getElementRect={...} scrollToElement={...} />
+
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
+  Image,
   Modal,
   Platform,
   StyleSheet,
@@ -12,13 +17,15 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import uniBotImage from "../../assets/mascot.png";
 
-const storageKey = (uid) => `onboarding_v5_${uid}`;
+// bump version per-screen to allow re-triggering independently
+const storageKey = (uid, screen) => `onboarding_v6_${screen}_${uid}`;
 
 const TAB_COUNT = 5;
 
-// ─── Step definitions ─────────────────────────────────────────────────────────
-const BASE_STEPS = [
+// ─── HOME SCREEN STEPS ────────────────────────────────────────────────────────
+const HOME_STEPS = [
   {
     id: "welcome",
     type: "center",
@@ -27,7 +34,7 @@ const BASE_STEPS = [
     icon: "sparkles-outline",
     iconColor: "#a5b4fc",
     title: "Welcome to UniPay! ",
-    body: "This is your all-in-one student portal for managing school fees, checking exam clearance, and paying your balance. Let's take a quick tour!",
+    body: "Your all-in-one student portal for managing school fees, checking exam clearance, and paying your balance. I'm UniBot — let me show you around!",
   },
   {
     id: "header",
@@ -37,7 +44,7 @@ const BASE_STEPS = [
     icon: "person-outline",
     iconColor: "#93c5fd",
     title: "Your Dashboard Header",
-    body: "At the top you'll see your name, student number, and the current exam period. Tap the bell to check notifications, or tap your profile photo to open your profile.",
+    body: "See your name, student number, and current exam period at a glance. Tap the bell  for notifications, or your photo to open your profile.",
   },
   {
     id: "clearance_card",
@@ -47,7 +54,7 @@ const BASE_STEPS = [
     icon: "shield-checkmark-outline",
     iconColor: "#6ee7b7",
     title: "Exam Clearance Status",
-    body: "This card shows CLEARED or PENDING. You need a ₱0 remaining balance to be automatically cleared for exams. It updates instantly after every payment.",
+    body: "This card shows CLEARED  or PENDING . You need a ₱0 remaining balance to be automatically cleared for exams. It updates instantly after every payment.",
   },
   {
     id: "summary_cards",
@@ -77,7 +84,7 @@ const BASE_STEPS = [
     icon: "card-outline",
     iconColor: "#fde68a",
     title: "Pay Your Fees",
-    body: "Tap here to pay via GCash. You'll see your exact balance due, enter your GCash reference number, and submit. Payments reflect within minutes and clearance updates automatically.",
+    body: "Tap here to pay via GCash. You'll see your exact balance due, enter your GCash reference number, and submit. Payments reflect within minutes!",
   },
   {
     id: "history_action",
@@ -87,7 +94,7 @@ const BASE_STEPS = [
     icon: "time-outline",
     iconColor: "#6ee7b7",
     title: "Payment History",
-    body: "View every transaction you've made — date, amount, and reference number. You can download an official receipt for any payment directly from this screen.",
+    body: "View every transaction — date, amount, and reference number. Download an official receipt for any payment directly from this screen.",
   },
   {
     id: "tab_home",
@@ -107,17 +114,27 @@ const BASE_STEPS = [
     icon: "cash-outline",
     iconColor: "#93c5fd",
     title: "Fees Screen",
-    body: "The Fees tab shows a full itemized list of everything you owe — organized by Tuition, Miscellaneous, and Exam fees. Grand total and remaining balance are at the bottom.",
+    body: "The Fees tab shows a full itemized list of everything you owe — organized by Tuition, Miscellaneous, and Exam fees.",
+  },
+  {
+    id: "tab_pay",
+    type: "tab",
+    layoutKey: null,
+    tabIndex: 2,
+    icon: "card-outline",
+    iconColor: "#fde68a",
+    title: "Pay Tab",
+    body: "The glowing center button takes you directly to the payment screen. Tap it any time to pay your fees via GCash quickly.",
   },
   {
     id: "tab_unibot",
     type: "unibot",
     layoutKey: null,
-    tabIndex: 2,
+    tabIndex: null,
     icon: "chatbubble-ellipses-outline",
     iconColor: "#fde68a",
     title: "UniBot — Your AI Assistant ",
-    body: 'That glowing button in the center of the nav bar is UniBot! Your AI-powered helper, available 24/7.\n\nAsk it anything:\n• "How do I pay my fees?"\n• "Why am I not cleared?"\n• "What documents do I need?"\n\nJust tap the center button!',
+    body: 'That glowing button in the bottom-right corner is me — UniBot! Available 24/7 to help.\n\nAsk anything:\n• "How do I pay my fees?"\n• "Why am I not cleared?"\n• "What documents do I need?"\n\nJust tap the UniBot button!',
   },
   {
     id: "tab_clearance",
@@ -146,8 +163,8 @@ const BASE_STEPS = [
     tabIndex: null,
     icon: "bulb-outline",
     iconColor: "#fde68a",
-    title: "Helpful Tips 💡",
-    body: "• Pull down on any screen to refresh\n• GCash payments need a valid reference number\n• Profile edits: 3-day cooldown; photos: 7-day cooldown\n• Clearance updates automatically — no need to ask\n• UniBot can answer most questions instantly",
+    title: "Helpful Tips ",
+    body: "• Pull down on any screen to refresh\n• GCash payments need a valid reference number\n• Profile edits: 3-day cooldown; photos: 7-day cooldown\n• Clearance updates automatically — no need to ask\n• Ask me (UniBot) anything, anytime!",
   },
   {
     id: "done",
@@ -157,9 +174,228 @@ const BASE_STEPS = [
     icon: "checkmark-circle-outline",
     iconColor: "#6ee7b7",
     title: "You're all set! ",
-    body: "That's the full tour! UniBot is always here if you get stuck. Good luck on your exams — we're rooting for you!",
+    body: "That's the full tour! I'm UniBot and I'm always here if you get stuck. Good luck on your exams — we're rooting for you! ",
   },
 ];
+
+// ─── FEES SCREEN STEPS ────────────────────────────────────────────────────────
+const FEES_STEPS = [
+  {
+    id: "fees_welcome",
+    type: "center",
+    layoutKey: null,
+    tabIndex: null,
+    icon: "cash-outline",
+    iconColor: "#93c5fd",
+    title: "School Fees Screen ",
+    body: "Hi! I'm UniBot. This screen shows all your fees for the current semester. Let me walk you through everything here!",
+  },
+  {
+    id: "fees_header",
+    type: "element",
+    layoutKey: "feesHeader",
+    tabIndex: null,
+    icon: "calendar-outline",
+    iconColor: "#fde68a",
+    title: "Exam Period & Pay Button",
+    body: "The header shows your current exam period and semester. The 'Pay' button on the right is a quick shortcut to go directly to the payment screen.",
+  },
+  {
+    id: "fees_summary",
+    type: "element",
+    layoutKey: "feesSummary",
+    tabIndex: null,
+    icon: "wallet-outline",
+    iconColor: "#6ee7b7",
+    title: "Fee Summary Card",
+    body: "This card shows your remaining balance (or 'Fully Paid' if you're all settled). The pill on the right shows your grand total for quick reference.",
+  },
+  {
+    id: "fees_sections",
+    type: "center",
+    layoutKey: null,
+    tabIndex: null,
+    icon: "list-outline",
+    iconColor: "#c4b5fd",
+    title: "Fee Breakdown Sections",
+    body: "Your fees are organized into three sections:\n\n Tuition Fees\n Miscellaneous Fees\n Exam Fees\n\nEach section shows individual items with amounts and a subtotal.",
+  },
+  {
+    id: "fees_total",
+    type: "element",
+    layoutKey: "feesTotal",
+    tabIndex: null,
+    icon: "calculator-outline",
+    iconColor: "#fde68a",
+    title: "Grand Total Summary",
+    body: "At the bottom you'll see:\n\n• Grand Total — full amount\n• Total Paid — what you've already paid\n• Balance Due — what's remaining\n\nBalance Due turns green when fully paid! ",
+  },
+  {
+    id: "fees_done",
+    type: "center",
+    layoutKey: null,
+    tabIndex: null,
+    icon: "checkmark-circle-outline",
+    iconColor: "#6ee7b7",
+    title: "Fees Screen Tour Done! ",
+    body: "You now know how to read your fee breakdown. Pull down to refresh, or tap 'Pay' to settle your balance. Ask me anything anytime! ",
+  },
+];
+
+// ─── CLEARANCE SCREEN STEPS ───────────────────────────────────────────────────
+const CLEARANCE_STEPS = [
+  {
+    id: "clearance_welcome",
+    type: "center",
+    layoutKey: null,
+    tabIndex: null,
+    icon: "shield-checkmark-outline",
+    iconColor: "#6ee7b7",
+    title: "Exam Clearance Screen ",
+    body: "Hi! I'm UniBot. This screen is your official clearance record. Let me explain what everything means!",
+  },
+  {
+    id: "clearance_header",
+    type: "element",
+    layoutKey: "clearanceHeader",
+    tabIndex: null,
+    icon: "camera-outline",
+    iconColor: "#93c5fd",
+    title: "Header & Screenshot Mode",
+    body: "The header shows your current exam period. Tap the  camera icon to enter Screenshot Mode — this hides the status bar for a clean clearance screenshot you can share!",
+  },
+  {
+    id: "clearance_status",
+    type: "element",
+    layoutKey: "clearanceStatus",
+    tabIndex: null,
+    icon: "checkmark-circle-outline",
+    iconColor: "#6ee7b7",
+    title: "Your Clearance Status",
+    body: "This card shows CLEARED  or PENDING .\n\n• CLEARED — Your fees are fully paid. You can take exams!\n• PENDING — You still have a balance to settle.\n\nStatus updates automatically after payment.",
+  },
+  {
+    id: "clearance_details",
+    type: "element",
+    layoutKey: "clearanceDetails",
+    tabIndex: null,
+    icon: "document-text-outline",
+    iconColor: "#c4b5fd",
+    title: "Clearance Details",
+    body: "This card contains your:\n\n Student Name\n School Year & Semester\n Current Exam Period\n Date Cleared (if applicable)\n\nThese details are official and can be used for verification.",
+  },
+  {
+    id: "clearance_note",
+    type: "element",
+    layoutKey: "clearanceNote",
+    tabIndex: null,
+    icon: "alert-circle-outline",
+    iconColor: "#fde68a",
+    title: "Action Card",
+    body: "The note card at the bottom gives you guidance:\n\n• If PENDING — shows your remaining balance and directs you to pay\n• If CLEARED — confirms you're all set for exams\n• If No Fees — tells you to contact the administrator",
+  },
+  {
+    id: "clearance_done",
+    type: "center",
+    layoutKey: null,
+    tabIndex: null,
+    icon: "checkmark-circle-outline",
+    iconColor: "#6ee7b7",
+    title: "Clearance Screen Done! ",
+    body: "You're all set! Remember: clearance updates automatically — no need to ask anyone. Pay your fees and watch it flip to CLEARED instantly. I'm here if you need me! ",
+  },
+];
+
+// ─── PROFILE SCREEN STEPS ────────────────────────────────────────────────────
+const PROFILE_STEPS = [
+  {
+    id: "profile_welcome",
+    type: "center",
+    layoutKey: null,
+    tabIndex: null,
+    icon: "person-circle-outline",
+    iconColor: "#c4b5fd",
+    title: "Your Profile Screen ",
+    body: "Hi! I'm UniBot. This is your personal profile page. Let me show you what you can do here!",
+  },
+  {
+    id: "profile_header",
+    type: "element",
+    layoutKey: "profileHeader",
+    tabIndex: null,
+    icon: "camera-outline",
+    iconColor: "#93c5fd",
+    title: "Profile Header & Avatar",
+    body: "Tap your profile photo to change it . You can take a new photo or pick from your gallery.\n\nNote: Profile photos have a 7-day cooldown between updates. The  icon appears when locked.\n\nTap the ID card icon (top right) to view your Student ID.",
+  },
+  {
+    id: "profile_info",
+    type: "element",
+    layoutKey: "profileInfo",
+    tabIndex: null,
+    icon: "create-outline",
+    iconColor: "#fde68a",
+    title: "Student Information",
+    body: "View your student details here:\n\n• Student number, email, course, year level, contact\n\nTap the ✏️ edit icon to update your info. Note: Edits have a 3-day cooldown. The  lock icon appears when you need to wait.",
+  },
+  {
+    id: "profile_security",
+    type: "element",
+    layoutKey: "profileSecurity",
+    tabIndex: null,
+    icon: "shield-checkmark-outline",
+    iconColor: "#6ee7b7",
+    title: "Account Security",
+    body: "Tap 'Change Password' to update your login password.\n\nThe password strength meter helps you create a secure password:\n\n🔴 Weak → 🟡 Fair → 🟢 Strong\n\nAlways use at least 8 characters with a mix of letters, numbers, and symbols.",
+  },
+  {
+    id: "profile_appearance",
+    type: "element",
+    layoutKey: "profileAppearance",
+    tabIndex: null,
+    icon: "moon-outline",
+    iconColor: "#c4b5fd",
+    title: "Dark Mode Toggle",
+    body: "Toggle between dark  and light  themes to suit your preference. The change applies instantly across the entire app!",
+  },
+  {
+    id: "profile_support",
+    type: "element",
+    layoutKey: "profileSupport",
+    tabIndex: null,
+    icon: "help-circle-outline",
+    iconColor: "#93c5fd",
+    title: "Support & Legal",
+    body: "Need help? Tap 'Contact Support' to email our team directly.\n\nYou can also read our Privacy Policy and Terms of Service from here anytime.",
+  },
+  {
+    id: "profile_logout",
+    type: "element",
+    layoutKey: "profileLogout",
+    tabIndex: null,
+    icon: "log-out-outline",
+    iconColor: "#f87171",
+    title: "Logout Button",
+    body: "When you're done, tap the Logout button to sign out securely. A confirmation dialog will appear to prevent accidental logouts.",
+  },
+  {
+    id: "profile_done",
+    type: "center",
+    layoutKey: null,
+    tabIndex: null,
+    icon: "checkmark-circle-outline",
+    iconColor: "#6ee7b7",
+    title: "Profile Tour Done! ",
+    body: "You now know your way around the Profile screen. Remember: keep your contact info updated so you never miss important announcements. I'm UniBot — always here to help! ",
+  },
+];
+
+const SCREEN_STEPS = {
+  home: HOME_STEPS,
+  fees: FEES_STEPS,
+  clearance: CLEARANCE_STEPS,
+  profile: PROFILE_STEPS,
+};
 
 const BORDER_RADIUS = {
   header: 0,
@@ -168,6 +404,23 @@ const BORDER_RADIUS = {
   fees: 25,
   pay: 25,
   history: 25,
+  // fees screen
+  feesHeader: 0,
+  feesSummary: 25,
+  feesSections: 20,
+  feesTotal: 20,
+  // clearance screen
+  clearanceHeader: 0,
+  clearanceStatus: 24,
+  clearanceDetails: 20,
+  clearanceNote: 18,
+  // profile screen
+  profileHeader: 0,
+  profileInfo: 20,
+  profileSecurity: 20,
+  profileAppearance: 20,
+  profileSupport: 20,
+  profileLogout: 30,
 };
 
 const STEP_VERTICAL_PADDING = {
@@ -177,6 +430,20 @@ const STEP_VERTICAL_PADDING = {
   fees: -3,
   pay: -3,
   history: -3,
+  feesHeader: -30,
+  feesSummary: 10,
+  feesSections: 0,
+  feesTotal: 0,
+  clearanceHeader: -30,
+  clearanceStatus: 10,
+  clearanceDetails: 0,
+  clearanceNote: 0,
+  profileHeader: -30,
+  profileInfo: 0,
+  profileSecurity: 0,
+  profileAppearance: 0,
+  profileSupport: 0,
+  profileLogout: 0,
 };
 
 const STEP_HORIZONTAL_PADDING = {
@@ -186,6 +453,20 @@ const STEP_HORIZONTAL_PADDING = {
   fees: 0,
   pay: 0,
   history: 0,
+  feesHeader: -10,
+  feesSummary: -20,
+  feesSections: 0,
+  feesTotal: 0,
+  clearanceHeader: -10,
+  clearanceStatus: -20,
+  clearanceDetails: 0,
+  clearanceNote: 0,
+  profileHeader: -10,
+  profileInfo: 0,
+  profileSecurity: 0,
+  profileAppearance: 0,
+  profileSupport: 0,
+  profileLogout: 0,
 };
 
 const STEP_VERTICAL_SHIFT = {
@@ -195,9 +476,24 @@ const STEP_VERTICAL_SHIFT = {
   fees: 35,
   pay: 35,
   history: 35,
+  feesHeader: 40,
+  feesSummary: 30,
+  feesSections: 0,
+  feesTotal: 0,
+  clearanceHeader: 40,
+  clearanceStatus: 30,
+  clearanceDetails: 0,
+  clearanceNote: 0,
+  profileHeader: 40,
+  profileInfo: 0,
+  profileSecurity: 0,
+  profileAppearance: 0,
+  profileSupport: 0,
+  profileLogout: 0,
 };
 
 export default function OnboardingGuide({
+  screen = "home",
   userId,
   userName,
   getElementRect,
@@ -232,8 +528,10 @@ export default function OnboardingGuide({
   const [targetRect, setTargetRect] = useState(null);
   const [isLoadingRect, setIsLoadingRect] = useState(false);
 
+  const BASE_STEPS = SCREEN_STEPS[screen] || HOME_STEPS;
+
   const STEPS = BASE_STEPS.map((st, idx) => {
-    if (idx === 0 && userName) {
+    if (idx === 0 && userName && screen === "home") {
       return { ...st, title: `Welcome, ${userName.split(" ")[0]}! ` };
     }
     return st;
@@ -245,14 +543,17 @@ export default function OnboardingGuide({
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const ringFadeAnim = useRef(new Animated.Value(1)).current;
   const unibotBounce = useRef(new Animated.Value(0)).current;
+  // UniBot mascot entrance animation
+  const unibotMascotScale = useRef(new Animated.Value(0)).current;
+  const unibotMascotBounce = useRef(new Animated.Value(0)).current;
 
-  // Show on first launch
+  // Show on first launch per screen
   useEffect(() => {
     if (!userId) return;
-    AsyncStorage.getItem(storageKey(userId)).then((done) => {
+    AsyncStorage.getItem(storageKey(userId, screen)).then((done) => {
       if (!done) setVisible(true);
     });
-  }, [userId]);
+  }, [userId, screen]);
 
   // Overlay fade-in
   useEffect(() => {
@@ -262,6 +563,39 @@ export default function OnboardingGuide({
       duration: 320,
       useNativeDriver: true,
     }).start();
+  }, [visible]);
+
+  // UniBot mascot pop-in on each step
+  useEffect(() => {
+    if (!visible) return;
+    unibotMascotScale.setValue(0);
+    Animated.spring(unibotMascotScale, {
+      toValue: 1,
+      tension: 120,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+  }, [step, visible]);
+
+  // UniBot mascot idle bounce
+  useEffect(() => {
+    if (!visible) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(unibotMascotBounce, {
+          toValue: -6,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(unibotMascotBounce, {
+          toValue: 0,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
   }, [visible]);
 
   // Card slide-in per step
@@ -284,7 +618,7 @@ export default function OnboardingGuide({
     ]).start();
   }, [step, visible]);
 
-  // Spotlight pulse loop
+  // Spotlight pulse loop (kept for compatibility but spotlight never renders)
   useEffect(() => {
     if (!visible) return;
     const loop = Animated.loop(
@@ -305,7 +639,7 @@ export default function OnboardingGuide({
     return () => loop.stop();
   }, [step, visible]);
 
-  // ── Bouncing arrow for both unibot and tab steps ───────────────────────────
+  // Bouncing arrow for unibot and tab steps
   useEffect(() => {
     const stepType = STEPS[step]?.type;
     if (!visible || (stepType !== "unibot" && stepType !== "tab")) {
@@ -330,7 +664,7 @@ export default function OnboardingGuide({
     return () => loop.stop();
   }, [step, visible]);
 
-  // ── Rect resolver ──────────────────────────────────────────────────────────
+  // Rect resolver
   useEffect(() => {
     if (!visible) return;
     const currentStep = STEPS[step];
@@ -355,7 +689,7 @@ export default function OnboardingGuide({
     const load = async () => {
       const rect = await getElementRect(
         currentStep.layoutKey,
-        BORDER_RADIUS[currentStep.layoutKey],
+        BORDER_RADIUS[currentStep.layoutKey] ?? 20,
       );
       if (!rect) {
         attempts++;
@@ -373,7 +707,7 @@ export default function OnboardingGuide({
         setTimeout(async () => {
           const r2 = await getElementRect(
             currentStep.layoutKey,
-            BORDER_RADIUS[currentStep.layoutKey],
+            BORDER_RADIUS[currentStep.layoutKey] ?? 20,
           );
           if (r2) setTargetRect(r2);
         }, 300);
@@ -408,7 +742,7 @@ export default function OnboardingGuide({
       duration: 200,
       useNativeDriver: true,
     }).start(() => setVisible(false));
-    if (userId) await AsyncStorage.setItem(storageKey(userId), "true");
+    if (userId) await AsyncStorage.setItem(storageKey(userId, screen), "true");
   };
 
   const goNext = () => {
@@ -441,7 +775,7 @@ export default function OnboardingGuide({
   const progress = ((step + 1) / STEPS.length) * 100;
 
   const CARD_MARGIN = s(16);
-  const CARD_EST_H = vs(230);
+  const CARD_EST_H = vs(240);
   const GAP = vs(14);
 
   const lk = current.layoutKey;
@@ -449,7 +783,7 @@ export default function OnboardingGuide({
   const hPad = lk ? (STEP_HORIZONTAL_PADDING[lk] ?? 4) : 0;
   const vShift = lk ? (STEP_VERTICAL_SHIFT[lk] ?? 0) : 0;
 
-  // ── Tooltip position ───────────────────────────────────────────────────────
+  // Tooltip position
   let tooltipStyle = {};
   let arrowDir = null;
   let arrowLeft = null;
@@ -461,7 +795,8 @@ export default function OnboardingGuide({
     const cw = SW - CARD_MARGIN * 2;
     arrowLeft = Math.max(12, Math.min(cx - CARD_MARGIN - 12, cw - 24));
   } else if (current.type === "unibot") {
-    tooltipStyle = { bottom: SH - TAB_BAR_TOP + 58 + GAP + 24 };
+    // Card sits above the UniBot floating button area
+    tooltipStyle = { bottom: s(100) };
     arrowDir = null;
   } else if (current.type === "center" || !rect) {
     tooltipStyle = { top: SH / 2 - CARD_EST_H / 2 };
@@ -483,28 +818,31 @@ export default function OnboardingGuide({
     }
   }
 
-  // ── Spotlight rect (element steps only — tab steps use the arrow instead) ──
-  let spotRect = null;
-  if (current.type === "element" && rect) {
-    spotRect = {
-      top: rect.y + vShift - vPad,
-      left: rect.x - hPad,
-      width: rect.width + hPad * 2,
-      height: rect.height + vPad * 2,
-      borderRadius: (rect.borderRadius ?? s(16)) + Math.min(hPad, vPad),
-    };
-  }
+  // ─── HIGHLIGHT REMOVED ──────────────────────────────────────────────────────
+  // Spotlight rect is disabled entirely – no visual highlight will appear.
+  const spotRect = null; // <-- all spotlights removed
 
-  // ── UniBot arrow position — always centred on the middle tab ──────────────
-  const unibotCenterX = TAB_W * 2 + TAB_W / 2 - UNIBOT_ICON_SIZE / 2;
-  const unibotBottom = SH - TAB_BAR_TOP + 15;
+  // ── UniBot floating button position (bottom-right corner) ──────────────────
+  // Adjust these values to match where your UniBot FAB actually sits
+  const unibotCenterX = SW - s(72); // ~72px from right edge
+  const unibotBottom = s(180); // ~24px above the screen bottom
 
   const sectionLabel =
     current.type === "tab" || current.type === "unibot"
       ? "Navigation"
       : current.type === "element"
-        ? "Home Screen"
+        ? screen === "home"
+          ? "Home Screen"
+          : screen === "fees"
+            ? "Fees Screen"
+            : screen === "clearance"
+              ? "Clearance"
+              : "Profile"
         : "Overview";
+
+  // Whether to show the mascot (center steps get a bigger mascot above card)
+  const showBigMascot = current.type === "center" || current.type === "unibot";
+  const showSmallMascot = current.type === "element" || current.type === "tab";
 
   return (
     <Modal
@@ -514,25 +852,10 @@ export default function OnboardingGuide({
       statusBarTranslucent
     >
       <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}>
-        {/* ── Spotlight (element steps only) ── */}
-        {spotRect && !isLoadingRect && (
-          <Animated.View
-            style={[
-              styles.spotlight,
-              {
-                top: spotRect.top,
-                left: spotRect.left,
-                width: spotRect.width,
-                height: spotRect.height,
-                borderRadius: spotRect.borderRadius,
-                transform: [{ scale: pulseAnim }],
-                opacity: ringFadeAnim,
-              },
-            ]}
-          />
-        )}
+        {/* ── Spotlight (disabled) ── */}
+        {/* No spotlight rendered because spotRect is always null */}
 
-        {/* ── UniBot bouncing yellow arrow ── */}
+        {/* ── UniBot bouncing yellow arrow — points to bottom-right FAB ── */}
         {current.type === "unibot" && (
           <Animated.View
             style={[
@@ -562,12 +885,40 @@ export default function OnboardingGuide({
               styles.unibotIndicator,
               {
                 left: rect.x + rect.width / 2 - UNIBOT_ICON_SIZE / 2,
-                bottom: unibotBottom,
+                top: TAB_BAR_TOP - s(50),
                 transform: [{ translateY: unibotBounce }],
               },
             ]}
           >
             <Ionicons name="arrow-down-circle" size={s(34)} color="#60a5fa" />
+          </Animated.View>
+        )}
+
+        {/* ── Big UniBot Mascot (center/unibot steps) ── */}
+        {showBigMascot && (
+          <Animated.View
+            style={[
+              styles.bigMascotWrap,
+              {
+                top: tooltipStyle.top
+                  ? tooltipStyle.top - s(110)
+                  : tooltipStyle.bottom
+                    ? undefined
+                    : SH / 2 - CARD_EST_H / 2 - s(110),
+                bottom: tooltipStyle.bottom
+                  ? tooltipStyle.bottom + CARD_EST_H + s(8)
+                  : undefined,
+                transform: [
+                  { scale: unibotMascotScale },
+                  { translateY: unibotMascotBounce },
+                ],
+              },
+            ]}
+          >
+            <Image
+              source={uniBotImage}
+              style={[styles.bigMascotImg, { width: s(180), height: s(180) }]}
+            />
           </Animated.View>
         )}
 
@@ -617,7 +968,7 @@ export default function OnboardingGuide({
               <View style={[styles.progressFill, { width: `${progress}%` }]} />
             </View>
 
-            {/* Chip + close */}
+            {/* Chip + small mascot + close */}
             <View style={[styles.chipRow, { marginBottom: vs(8) }]}>
               <View
                 style={[
@@ -639,17 +990,37 @@ export default function OnboardingGuide({
                   {sectionLabel}
                 </Text>
               </View>
-              <TouchableOpacity
-                onPress={dismiss}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                style={styles.closeBtn}
-              >
-                <Ionicons
-                  name="close"
-                  size={s(16)}
-                  color="rgba(255,255,255,0.35)"
-                />
-              </TouchableOpacity>
+
+              <View style={styles.chipRight}>
+                {/* Small UniBot mascot in card header */}
+                {showSmallMascot && (
+                  <Animated.View
+                    style={[
+                      styles.smallMascotWrap,
+                      { transform: [{ translateY: unibotMascotBounce }] },
+                    ]}
+                  >
+                    <Image
+                      source={uniBotImage}
+                      style={[
+                        styles.smallMascotImg,
+                        { width: s(100), height: s(100) },
+                      ]}
+                    />
+                  </Animated.View>
+                )}
+                <TouchableOpacity
+                  onPress={dismiss}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  style={styles.closeBtn}
+                >
+                  <Ionicons
+                    name="close"
+                    size={s(16)}
+                    color="rgba(255,255,255,0.35)"
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Title */}
@@ -713,7 +1084,7 @@ export default function OnboardingGuide({
                   ]}
                 >
                   <Text style={[styles.nextText, { fontSize: s(13) }]}>
-                    {isLast ? "Get Started" : "Next"}
+                    {isLast ? "Let's Go! " : "Next"}
                   </Text>
                   {!isLast && (
                     <Ionicons
@@ -757,6 +1128,27 @@ const styles = StyleSheet.create({
     color: "rgb(244,180,20)",
     fontWeight: "700",
     letterSpacing: 0.5,
+  },
+  bigMascotWrap: {
+    position: "absolute",
+    alignSelf: "center",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  bigMascotImg: {
+    borderRadius: 999,
+  },
+  smallMascotWrap: {
+    marginRight: 4,
+  },
+  smallMascotImg: {
+    borderRadius: 999,
+  },
+  chipRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   card: {
     position: "absolute",

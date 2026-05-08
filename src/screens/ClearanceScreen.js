@@ -1,3 +1,4 @@
+// ClearanceScreen.js — Updated with OnboardingGuide (screen="clearance")
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { BlurView } from "expo-blur";
@@ -16,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import OnboardingGuide from "../components/OnboardingGuide";
 import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
@@ -37,7 +39,34 @@ export default function ClearanceScreen({ navigation, setScreenshotMode }) {
   const [showExitHint, setShowExitHint] = useState(false);
   const lastTapRef = useRef(0);
 
-  // Pulse animation for loading overlay
+  // ── Onboarding refs ─────────────────────────────────────────────────────
+  const refs = {
+    clearanceHeader: useRef(null),
+    clearanceStatus: useRef(null),
+    clearanceDetails: useRef(null),
+    clearanceNote: useRef(null),
+  };
+
+  const scrollViewRef = useRef(null);
+
+  const getElementRect = (key, borderRadius = 20) => {
+    const ref = refs[key];
+    if (ref?.current && typeof ref.current.measureInWindow === "function") {
+      return new Promise((resolve) => {
+        ref.current.measureInWindow((x, y, w, h) => {
+          if (w > 0 && h > 0)
+            resolve({ x, y, width: w, height: h, borderRadius });
+          else resolve(null);
+        });
+      });
+    }
+    return Promise.resolve(null);
+  };
+
+  const scrollToElement = (y) => {
+    scrollViewRef.current?.scrollTo({ y, animated: true });
+  };
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (loading) {
@@ -72,9 +101,8 @@ export default function ClearanceScreen({ navigation, setScreenshotMode }) {
       const AsyncStorage =
         require("@react-native-async-storage/async-storage").default;
       const storedToken = await AsyncStorage.getItem("@token");
-      if (storedToken) {
+      if (storedToken)
         api.defaults.headers.Authorization = `Bearer ${storedToken}`;
-      }
       const [clearanceRes, breakdownRes, examPeriodRes] = await Promise.all([
         api.get("/clearance"),
         api.get("/fees/breakdown"),
@@ -112,9 +140,7 @@ export default function ClearanceScreen({ navigation, setScreenshotMode }) {
 
   const handleDoubleTap = () => {
     const now = Date.now();
-    if (now - lastTapRef.current < 300) {
-      disableScreenshotMode();
-    }
+    if (now - lastTapRef.current < 300) disableScreenshotMode();
     lastTapRef.current = now;
   };
 
@@ -161,7 +187,6 @@ export default function ClearanceScreen({ navigation, setScreenshotMode }) {
       ...(breakdown?.miscellaneous?.fees || []),
       ...(breakdown?.exam?.fees || []),
     ].length > 0;
-
   const currentExamPeriod = examPeriodData?.exam_period ?? null;
   const currentSemester = examPeriodData?.semester ?? null;
   const currentSchoolYear = examPeriodData?.school_year ?? null;
@@ -226,7 +251,6 @@ export default function ClearanceScreen({ navigation, setScreenshotMode }) {
             : "rgba(255,255,255,0.7)"
     : null;
 
-  // Determine ScrollView behavior based on screenshot mode
   const scrollViewProps = !screenshotMode
     ? {
         refreshControl: (
@@ -238,276 +262,292 @@ export default function ClearanceScreen({ navigation, setScreenshotMode }) {
         ),
       }
     : {
-        scrollEnabled: false, // disable scrolling for clean screenshot
-        contentContainerStyle: styles.screenshotContentContainer, // full height + center
+        scrollEnabled: false,
+        contentContainerStyle: styles.screenshotContentContainer,
       };
 
   const content = (
     <ScrollView
+      ref={scrollViewRef}
       style={[styles.container, { backgroundColor: colors.background }]}
       {...scrollViewProps}
     >
-      {/* Gradient Header with Screenshot Button */}
-      <LinearGradient
-        colors={[colors.gradientStart, colors.gradientEnd]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerGradient}
-      >
-        <View style={styles.headerRow}>
-          <Text style={styles.headerTitle}>Exam Clearance</Text>
-          {!screenshotMode && (
-            <TouchableOpacity
-              style={styles.screenshotHeaderButton}
-              onPress={enableScreenshotMode}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="camera-outline" size={20} color="#fff" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.headerMeta}>
-          {currentExamPeriod ? (
-            <View
-              style={[
-                styles.epPill,
-                {
-                  backgroundColor: `${epColor}30`,
-                  borderColor: `${epColor}60`,
-                },
-              ]}
-            >
-              <Ionicons
-                name="time-outline"
-                size={12}
-                color={epColor}
-                style={{ marginRight: 4 }}
-              />
-              <Text style={[styles.epPillText, { color: epColor }]}>
-                {currentExamPeriod}
-              </Text>
-              {currentSemester && (
-                <Text style={[styles.epPillSep, { color: epColor }]}>
-                  {" · "}
-                  {currentSemester}
-                </Text>
-              )}
-            </View>
-          ) : (
-            <View style={styles.epPillNone}>
-              <Ionicons
-                name="time-outline"
-                size={12}
-                color="rgba(255,255,255,0.5)"
-                style={{ marginRight: 4 }}
-              />
-              <Text style={styles.epPillNoneText}>No exam period set</Text>
-            </View>
-          )}
-          {currentSchoolYear && (
-            <Text style={styles.headerSchoolYear}>{currentSchoolYear}</Text>
-          )}
-        </View>
-      </LinearGradient>
-
-      {/* Status Card */}
-      <View
-        style={[
-          styles.statusCard,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-      >
-        <View
-          style={[
-            styles.statusIconContainer,
-            { borderColor: iconColor, backgroundColor: colors.background },
-          ]}
+      {/* ── Header ── */}
+      <View ref={refs.clearanceHeader}>
+        <LinearGradient
+          colors={[colors.gradientStart, colors.gradientEnd]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
         >
-          <Ionicons name={statusIcon} size={64} color={iconColor} />
-        </View>
-        {statusText ? (
-          <Text style={[styles.statusText, { color: iconColor }]}>
-            {statusText}
-          </Text>
-        ) : null}
-        <Text style={[styles.statusMessage, { color: colors.textSecondary }]}>
-          {statusMessage}
-        </Text>
-      </View>
-
-      {/* Clearance Details Card */}
-      <View
-        style={[
-          styles.detailsCard,
-          { backgroundColor: colors.surface, borderColor: colors.borderLight },
-        ]}
-      >
-        <Text
-          style={[
-            styles.detailsTitle,
-            { color: colors.brand, borderBottomColor: colors.border },
-          ]}
-        >
-          Clearance Details
-        </Text>
-        {detailRows.map(([icon, label, value, iconOverride], i) => (
-          <View
-            key={label}
-            style={[
-              styles.detailRow,
-              { borderBottomColor: colors.borderLight },
-              i === detailRows.length - 1 && { borderBottomWidth: 0 },
-            ]}
-          >
-            <Ionicons
-              name={icon}
-              size={22}
-              color={iconOverride || colors.brand}
-            />
-            <View style={styles.detailTextContainer}>
-              <Text
-                style={[styles.detailLabel, { color: colors.textSecondary }]}
+          <View style={styles.headerRow}>
+            <Text style={styles.headerTitle}>Exam Clearance</Text>
+            {!screenshotMode && (
+              <TouchableOpacity
+                style={styles.screenshotHeaderButton}
+                onPress={enableScreenshotMode}
+                activeOpacity={0.8}
               >
-                {label}
-              </Text>
-              <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                {value}
-              </Text>
-            </View>
+                <Ionicons name="camera-outline" size={20} color="#fff" />
+              </TouchableOpacity>
+            )}
           </View>
-        ))}
-      </View>
-
-      {/* Note Cards (pending, cleared, no fees) – same as before */}
-      {hasFees && !isCleared && (
-        <View
-          style={[
-            styles.noteCard,
-            {
-              borderColor: "rgb(244,180,20)",
-              backgroundColor: colors.cooldownBg,
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.noteIconWrap,
-              { backgroundColor: "rgba(244,180,20,0.15)" },
-            ]}
-          >
-            <Ionicons name="warning" size={20} color="rgb(244, 180, 20)" />
-          </View>
-          <View style={styles.noteBody}>
-            <Text style={[styles.noteTitle, { color: colors.cooldownText }]}>
-              Action Required
-            </Text>
-            <Text style={[styles.noteText, { color: colors.cooldownText }]}>
-              To get your clearance, please pay your school fees through the
-              Payment section.
-            </Text>
-            {breakdown?.remaining_balance > 0 && (
+          <View style={styles.headerMeta}>
+            {currentExamPeriod ? (
               <View
                 style={[
-                  styles.notePill,
-                  { backgroundColor: "rgba(244,180,20,0.2)" },
+                  styles.epPill,
+                  {
+                    backgroundColor: `${epColor}30`,
+                    borderColor: `${epColor}60`,
+                  },
                 ]}
               >
                 <Ionicons
-                  name="cash-outline"
-                  size={13}
-                  color="rgb(244, 180, 20)"
+                  name="time-outline"
+                  size={12}
+                  color={epColor}
+                  style={{ marginRight: 4 }}
                 />
+                <Text style={[styles.epPillText, { color: epColor }]}>
+                  {currentExamPeriod}
+                </Text>
+                {currentSemester && (
+                  <Text style={[styles.epPillSep, { color: epColor }]}>
+                    {" · "}
+                    {currentSemester}
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <View style={styles.epPillNone}>
+                <Ionicons
+                  name="time-outline"
+                  size={12}
+                  color="rgba(255,255,255,0.5)"
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={styles.epPillNoneText}>No exam period set</Text>
+              </View>
+            )}
+            {currentSchoolYear && (
+              <Text style={styles.headerSchoolYear}>{currentSchoolYear}</Text>
+            )}
+          </View>
+        </LinearGradient>
+      </View>
+
+      {/* ── Status Card ── */}
+      <View ref={refs.clearanceStatus}>
+        <View
+          style={[
+            styles.statusCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={[
+              styles.statusIconContainer,
+              { borderColor: iconColor, backgroundColor: colors.background },
+            ]}
+          >
+            <Ionicons name={statusIcon} size={64} color={iconColor} />
+          </View>
+          {statusText ? (
+            <Text style={[styles.statusText, { color: iconColor }]}>
+              {statusText}
+            </Text>
+          ) : null}
+          <Text style={[styles.statusMessage, { color: colors.textSecondary }]}>
+            {statusMessage}
+          </Text>
+        </View>
+      </View>
+
+      {/* ── Details Card ── */}
+      <View ref={refs.clearanceDetails}>
+        <View
+          style={[
+            styles.detailsCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.borderLight,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.detailsTitle,
+              { color: colors.brand, borderBottomColor: colors.border },
+            ]}
+          >
+            Clearance Details
+          </Text>
+          {detailRows.map(([icon, label, value, iconOverride], i) => (
+            <View
+              key={label}
+              style={[
+                styles.detailRow,
+                { borderBottomColor: colors.borderLight },
+                i === detailRows.length - 1 && { borderBottomWidth: 0 },
+              ]}
+            >
+              <Ionicons
+                name={icon}
+                size={22}
+                color={iconOverride || colors.brand}
+              />
+              <View style={styles.detailTextContainer}>
                 <Text
-                  style={[styles.notePillText, { color: "rgb(244, 180, 20)" }]}
+                  style={[styles.detailLabel, { color: colors.textSecondary }]}
                 >
-                  Remaining Balance: ₱
-                  {Number(breakdown.remaining_balance).toLocaleString("en-PH", {
-                    minimumFractionDigits: 2,
-                  })}
+                  {label}
+                </Text>
+                <Text
+                  style={[styles.detailValue, { color: colors.textPrimary }]}
+                >
+                  {value}
                 </Text>
               </View>
-            )}
-          </View>
+            </View>
+          ))}
         </View>
-      )}
+      </View>
 
-      {hasFees && isCleared && (
-        <View
-          style={[
-            styles.noteCard,
-            { borderColor: "#86efac", backgroundColor: colors.surface },
-          ]}
-        >
+      {/* ── Note Cards ── */}
+      <View ref={refs.clearanceNote}>
+        {hasFees && !isCleared && (
           <View
             style={[
-              styles.noteIconWrap,
-              { backgroundColor: "rgba(34,197,94,0.15)" },
+              styles.noteCard,
+              {
+                borderColor: "rgb(244,180,20)",
+                backgroundColor: colors.cooldownBg,
+              },
             ]}
           >
-            <Ionicons name="shield-checkmark" size={20} color="#16a34a" />
+            <View
+              style={[
+                styles.noteIconWrap,
+                { backgroundColor: "rgba(244,180,20,0.15)" },
+              ]}
+            >
+              <Ionicons name="warning" size={20} color="rgb(244, 180, 20)" />
+            </View>
+            <View style={styles.noteBody}>
+              <Text style={[styles.noteTitle, { color: colors.cooldownText }]}>
+                Action Required
+              </Text>
+              <Text style={[styles.noteText, { color: colors.cooldownText }]}>
+                To get your clearance, please pay your school fees through the
+                Payment section.
+              </Text>
+              {breakdown?.remaining_balance > 0 && (
+                <View
+                  style={[
+                    styles.notePill,
+                    { backgroundColor: "rgba(244,180,20,0.2)" },
+                  ]}
+                >
+                  <Ionicons
+                    name="cash-outline"
+                    size={13}
+                    color="rgb(244, 180, 20)"
+                  />
+                  <Text
+                    style={[
+                      styles.notePillText,
+                      { color: "rgb(244, 180, 20)" },
+                    ]}
+                  >
+                    Remaining Balance: ₱
+                    {Number(breakdown.remaining_balance).toLocaleString(
+                      "en-PH",
+                      { minimumFractionDigits: 2 },
+                    )}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-          <View style={styles.noteBody}>
-            <Text style={[styles.noteTitle, { color: "#16a34a" }]}>
-              You're All Set!
-            </Text>
-            <Text style={[styles.noteText, { color: colors.textSecondary }]}>
-              Your fees are fully settled. You are officially cleared to take
-              your examinations this semester.
-            </Text>
-            {clearance?.cleared_at && (
-              <View
-                style={[
-                  styles.notePill,
-                  { backgroundColor: "rgba(34,197,94,0.15)" },
-                ]}
-              >
-                <Ionicons name="checkmark-circle" size={13} color="#16a34a" />
-                <Text style={[styles.notePillText, { color: "#16a34a" }]}>
-                  Cleared on{" "}
-                  {new Date(clearance.cleared_at).toLocaleDateString("en-PH", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-      )}
+        )}
 
-      {!hasFees && (
-        <View
-          style={[
-            styles.noteCard,
-            { borderColor: colors.border, backgroundColor: colors.surface },
-          ]}
-        >
+        {hasFees && isCleared && (
           <View
             style={[
-              styles.noteIconWrap,
-              { backgroundColor: colors.borderLight },
+              styles.noteCard,
+              { borderColor: "#86efac", backgroundColor: colors.surface },
             ]}
           >
-            <Ionicons
-              name="receipt-outline"
-              size={20}
-              color={colors.textSecondary}
-            />
+            <View
+              style={[
+                styles.noteIconWrap,
+                { backgroundColor: "rgba(34,197,94,0.15)" },
+              ]}
+            >
+              <Ionicons name="shield-checkmark" size={20} color="#16a34a" />
+            </View>
+            <View style={styles.noteBody}>
+              <Text style={[styles.noteTitle, { color: "#16a34a" }]}>
+                You're All Set!
+              </Text>
+              <Text style={[styles.noteText, { color: colors.textSecondary }]}>
+                Your fees are fully settled. You are officially cleared to take
+                your examinations this semester.
+              </Text>
+              {clearance?.cleared_at && (
+                <View
+                  style={[
+                    styles.notePill,
+                    { backgroundColor: "rgba(34,197,94,0.15)" },
+                  ]}
+                >
+                  <Ionicons name="checkmark-circle" size={13} color="#16a34a" />
+                  <Text style={[styles.notePillText, { color: "#16a34a" }]}>
+                    Cleared on{" "}
+                    {new Date(clearance.cleared_at).toLocaleDateString(
+                      "en-PH",
+                      { year: "numeric", month: "long", day: "numeric" },
+                    )}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-          <View style={styles.noteBody}>
-            <Text style={[styles.noteTitle, { color: colors.textSecondary }]}>
-              No Fees Assigned
-            </Text>
-            <Text style={[styles.noteText, { color: colors.textMuted }]}>
-              No fees have been set for your course this semester. If you
-              believe this is an error, please contact the Cashier's Office or
-              your school administrator.
-            </Text>
+        )}
+
+        {!hasFees && (
+          <View
+            style={[
+              styles.noteCard,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+            ]}
+          >
+            <View
+              style={[
+                styles.noteIconWrap,
+                { backgroundColor: colors.borderLight },
+              ]}
+            >
+              <Ionicons
+                name="receipt-outline"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </View>
+            <View style={styles.noteBody}>
+              <Text style={[styles.noteTitle, { color: colors.textSecondary }]}>
+                No Fees Assigned
+              </Text>
+              <Text style={[styles.noteText, { color: colors.textMuted }]}>
+                No fees have been set for your course this semester. If you
+                believe this is an error, please contact the Cashier's Office or
+                your school administrator.
+              </Text>
+            </View>
           </View>
-        </View>
-      )}
+        )}
+      </View>
 
       <View style={{ height: screenshotMode ? 0 : 30 }} />
     </ScrollView>
@@ -533,17 +573,23 @@ export default function ClearanceScreen({ navigation, setScreenshotMode }) {
       ) : (
         content
       )}
+
+      {/* ── Onboarding Guide ── */}
+      {!screenshotMode && (
+        <OnboardingGuide
+          screen="clearance"
+          userId={user?.id}
+          getElementRect={getElementRect}
+          scrollToElement={scrollToElement}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loadingOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  loadingOverlay: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingLogoRing: {
     width: 110,
     height: 110,
@@ -557,10 +603,7 @@ const styles = StyleSheet.create({
     shadowRadius: 22,
     elevation: 14,
   },
-  loadingLogo: {
-    width: "100%",
-    height: "100%",
-  },
+  loadingLogo: { width: "100%", height: "100%" },
   loadingText: {
     marginTop: 20,
     fontSize: 18,
@@ -591,11 +634,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#fff",
-  },
+  headerTitle: { fontSize: 28, fontWeight: "bold", color: "#fff" },
   screenshotHeaderButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -604,11 +643,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 30,
     gap: 6,
-  },
-  screenshotHeaderText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
   },
   headerMeta: {
     flexDirection: "row",
@@ -744,13 +778,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 30,
   },
-  exitHintText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  screenshotContentContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
+  exitHintText: { color: "#fff", fontSize: 14, fontWeight: "500" },
+  screenshotContentContainer: { flexGrow: 1, justifyContent: "center" },
 });
