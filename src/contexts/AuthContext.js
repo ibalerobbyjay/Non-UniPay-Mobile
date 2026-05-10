@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
       const storedToken = await AsyncStorage.getItem("@token");
       const storedUser = await AsyncStorage.getItem("@user");
       if (storedToken && storedUser) {
-        setAuthToken(storedToken); // ← sets module-level + default header
+        setAuthToken(storedToken);
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
       }
@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }) => {
         };
       }
 
-      setAuthToken(access_token); // ← sets module-level + default header
+      setAuthToken(access_token);
       setToken(access_token);
       setUser(userData);
 
@@ -77,13 +77,19 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  async function updateUser(updates) {
+    const updated = { ...user, ...updates }; // ← use user directly, not prev
+    setUser(updated); // ← plain object = instant re-render
+    await AsyncStorage.setItem("@user", JSON.stringify(updated));
+  }
+
   async function logout() {
     try {
       await api.post("/logout");
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
-      setAuthToken(null); // ← clears module-level + default header
+      setAuthToken(null);
       setUser(null);
       setToken(null);
       await AsyncStorage.removeItem("@token");
@@ -93,7 +99,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, login, register, logout, loading }}
+      value={{ user, token, login, register, logout, updateUser, loading }}
     >
       {children}
     </AuthContext.Provider>

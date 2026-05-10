@@ -1,15 +1,4 @@
-// ProfileScreen.js — Updated with OnboardingGuide (screen="profile")
-// Only showing the key DIFF changes needed — the onboarding refs and OnboardingGuide mount.
-// The full file is your existing ProfileScreen.js with these additions:
-//
-// 1. Import OnboardingGuide at the top
-// 2. Add refs object inside the main component
-// 3. Wrap each major section View with ref={refs.xxx}
-// 4. Add getElementRect and scrollToElement helpers
-// 5. Mount <OnboardingGuide screen="profile" ... /> at the end
-//
-// Below is the COMPLETE updated ProfileScreen.js:
-
+// ProfileScreen.js — Updated with OnboardingGuide (screen="profile") + name editing
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 import { useFocusEffect } from "@react-navigation/native";
@@ -442,7 +431,7 @@ export default function ProfileScreen({ navigation }) {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, updateUser } = useContext(AuthContext);
   const { isDark, toggleTheme, colors } = useTheme();
 
   const [profile, setProfile] = useState(null);
@@ -450,6 +439,7 @@ export default function ProfileScreen({ navigation }) {
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
+    name: "", // ← added
     contact: "",
     course: "",
     year_level: "",
@@ -558,6 +548,7 @@ export default function ProfileScreen({ navigation }) {
       const data = response.data;
       setProfile(data);
       setFormData({
+        name: data.user?.name || user?.name || "", // ← populated
         contact: data.contact || "",
         course: data.course || "",
         year_level: data.year_level?.toString() || "",
@@ -611,12 +602,20 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleUpdate = async () => {
+    if (!formData.name.trim()) {
+      showAlert("Missing Field", "Full name cannot be empty.");
+      return;
+    }
     setLoading(true);
     try {
       await api.put("/student/profile", {
         ...formData,
         year_level: parseInt(formData.year_level) || 0,
       });
+
+      // ← THIS is the missing line — syncs name/email to context immediately
+      updateUser({ name: formData.name.trim(), email: formData.email.trim() });
+
       showAlert("Success", "Profile updated successfully.", "checkmark-circle");
       setEditing(false);
       loadProfile();
@@ -901,6 +900,7 @@ export default function ProfileScreen({ navigation }) {
                   </TouchableOpacity>
                 ))}
             </View>
+
             {cooldownMessage && !editing && (
               <View style={s.cooldownBanner}>
                 <Ionicons
@@ -911,8 +911,24 @@ export default function ProfileScreen({ navigation }) {
                 <Text style={s.cooldownText}>{cooldownMessage}</Text>
               </View>
             )}
+
             {editing ? (
               <View>
+                {/* ── Full Name ── */}
+                <View style={s.inputGroup}>
+                  <Text style={s.inputLabel}>Full Name</Text>
+                  <TextInput
+                    style={s.input}
+                    value={formData.name}
+                    onChangeText={(t) => setFormData({ ...formData, name: t })}
+                    autoCapitalize="words"
+                    placeholder="Enter your full name"
+                    placeholderTextColor={colors.textMuted}
+                    color={colors.textPrimary}
+                  />
+                </View>
+
+                {/* ── Email ── */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Email</Text>
                   <TextInput
@@ -925,6 +941,8 @@ export default function ProfileScreen({ navigation }) {
                     color={colors.textPrimary}
                   />
                 </View>
+
+                {/* ── Contact Number ── */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Contact Number</Text>
                   <TextInput
@@ -938,6 +956,8 @@ export default function ProfileScreen({ navigation }) {
                     color={colors.textPrimary}
                   />
                 </View>
+
+                {/* ── Course ── */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Course</Text>
                   <View
@@ -990,6 +1010,8 @@ export default function ProfileScreen({ navigation }) {
                     )}
                   </View>
                 </View>
+
+                {/* ── Year Level ── */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Year Level</Text>
                   <View
@@ -1028,6 +1050,7 @@ export default function ProfileScreen({ navigation }) {
                     </Picker>
                   </View>
                 </View>
+
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
                     style={[styles.button, s.cancelButton]}
@@ -1051,6 +1074,7 @@ export default function ProfileScreen({ navigation }) {
             ) : (
               <View>
                 {[
+                  ["Name:", formData.name || user?.name], // ← added
                   ["Student No:", profile?.student_no],
                   ["Email:", formData.email || user?.email],
                   ["Course:", profile?.course],
@@ -1115,6 +1139,7 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
             {changingPassword && (
               <View style={s.passwordForm}>
+                {/* Current Password */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Current Password</Text>
                   <View style={s.passwordInputWrapper}>
@@ -1144,6 +1169,8 @@ export default function ProfileScreen({ navigation }) {
                     </TouchableOpacity>
                   </View>
                 </View>
+
+                {/* New Password */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>New Password</Text>
                   <View style={s.passwordInputWrapper}>
@@ -1198,6 +1225,8 @@ export default function ProfileScreen({ navigation }) {
                     </View>
                   )}
                 </View>
+
+                {/* Confirm Password */}
                 <View style={s.inputGroup}>
                   <Text style={s.inputLabel}>Confirm New Password</Text>
                   <View
@@ -1245,6 +1274,7 @@ export default function ProfileScreen({ navigation }) {
                       </Text>
                     )}
                 </View>
+
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
                     style={[styles.button, s.cancelButton]}
@@ -1439,6 +1469,7 @@ export default function ProfileScreen({ navigation }) {
         onClose={closeAlert}
       />
 
+      {/* Image picker modal */}
       <Modal
         visible={showImagePickerModal}
         transparent
@@ -1495,6 +1526,7 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </Modal>
 
+      {/* Student ID modal */}
       <Modal
         visible={showQrModal}
         transparent
