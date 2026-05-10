@@ -17,7 +17,19 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import uniBotImage from "../../assets/mascot.png";
+
+// ─── MASCOT IMAGES (one per screen) ──────────────────────────────────────────
+import uniBotProfile from "../../assets/graduate.png"; // Profile
+import uniBotClearance from "../../assets/like.png"; // Clearance
+import uniBotImage from "../../assets/mascot.png"; // Home
+import uniBotFees from "../../assets/pen.png"; // Fees
+
+const SCREEN_MASCOT = {
+  home: uniBotImage,
+  fees: uniBotFees,
+  clearance: uniBotClearance,
+  profile: uniBotProfile,
+};
 
 // bump version per-screen to allow re-triggering independently
 const storageKey = (uid, screen) => `onboarding_v6_${screen}_${uid}`;
@@ -513,6 +525,9 @@ export default function OnboardingGuide({
   const TAB_W = SW / TAB_COUNT;
   const UNIBOT_ICON_SIZE = s(34);
 
+  // ─── Pick the correct mascot image for this screen ───────────────────────
+  const mascotImage = SCREEN_MASCOT[screen] ?? uniBotImage;
+
   function tabRect(index) {
     return {
       x: index * TAB_W,
@@ -795,37 +810,42 @@ export default function OnboardingGuide({
     const cw = SW - CARD_MARGIN * 2;
     arrowLeft = Math.max(12, Math.min(cx - CARD_MARGIN - 12, cw - 24));
   } else if (current.type === "unibot") {
-    // Card sits above the UniBot floating button area
     tooltipStyle = { bottom: s(100) };
     arrowDir = null;
   } else if (current.type === "center" || !rect) {
-    tooltipStyle = { top: SH / 2 - CARD_EST_H / 2 };
+    // Always anchor card to bottom so mascot has full space above it
+    tooltipStyle = { bottom: vs(40) };
   } else {
     const below = SH - (rect.y + rect.height);
     const above = rect.y;
+    const SAFE_TOP = vs(52); // never let the card go above this (accounts for status bar)
+    const arrowX = rect.x + rect.width / 2 - CARD_MARGIN - 12;
+
     if (below >= CARD_EST_H + GAP) {
+      // Enough space below — preferred position
       tooltipStyle = { top: rect.y + rect.height + GAP };
       arrowDir = "top";
-      arrowLeft = rect.x + rect.width / 2 - CARD_MARGIN - 12;
+      arrowLeft = arrowX;
     } else if (above >= CARD_EST_H + GAP) {
-      tooltipStyle = { bottom: SH - rect.y + GAP };
+      // Enough space above — clamp so card never goes off the top
+      const rawTop = rect.y - CARD_EST_H - GAP;
+      tooltipStyle = { top: Math.max(rawTop, SAFE_TOP) };
       arrowDir = "bottom";
-      arrowLeft = rect.x + rect.width / 2 - CARD_MARGIN - 12;
+      arrowLeft = arrowX;
     } else {
-      tooltipStyle = { top: Math.max(rect.y + rect.height + GAP, vs(8)) };
+      // Fallback — place below, clamped to safe top
+      tooltipStyle = { top: Math.max(rect.y + rect.height + GAP, SAFE_TOP) };
       arrowDir = "top";
-      arrowLeft = rect.x + rect.width / 2 - CARD_MARGIN - 12;
+      arrowLeft = arrowX;
     }
   }
 
   // ─── HIGHLIGHT REMOVED ──────────────────────────────────────────────────────
-  // Spotlight rect is disabled entirely – no visual highlight will appear.
-  const spotRect = null; // <-- all spotlights removed
+  const spotRect = null;
 
   // ── UniBot floating button position (bottom-right corner) ──────────────────
-  // Adjust these values to match where your UniBot FAB actually sits
-  const unibotCenterX = SW - s(72); // ~72px from right edge
-  const unibotBottom = s(180); // ~24px above the screen bottom
+  const unibotCenterX = SW - s(72);
+  const unibotBottom = s(180);
 
   const sectionLabel =
     current.type === "tab" || current.type === "unibot"
@@ -840,7 +860,7 @@ export default function OnboardingGuide({
               : "Profile"
         : "Overview";
 
-  // Whether to show the mascot (center steps get a bigger mascot above card)
+  // Whether to show the mascot
   const showBigMascot = current.type === "center" || current.type === "unibot";
   const showSmallMascot = current.type === "element" || current.type === "tab";
 
@@ -852,9 +872,6 @@ export default function OnboardingGuide({
       statusBarTranslucent
     >
       <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}>
-        {/* ── Spotlight (disabled) ── */}
-        {/* No spotlight rendered because spotRect is always null */}
-
         {/* ── UniBot bouncing yellow arrow — points to bottom-right FAB ── */}
         {current.type === "unibot" && (
           <Animated.View
@@ -894,20 +911,14 @@ export default function OnboardingGuide({
           </Animated.View>
         )}
 
-        {/* ── Big UniBot Mascot (center/unibot steps) ── */}
+        {/* ── Big Mascot (center/unibot steps) — uses screen-specific image ── */}
         {showBigMascot && (
           <Animated.View
             style={[
               styles.bigMascotWrap,
               {
-                top: tooltipStyle.top
-                  ? tooltipStyle.top - s(110)
-                  : tooltipStyle.bottom
-                    ? undefined
-                    : SH / 2 - CARD_EST_H / 2 - s(110),
-                bottom: tooltipStyle.bottom
-                  ? tooltipStyle.bottom + CARD_EST_H + s(8)
-                  : undefined,
+                // Always place mascot above the card (card is bottom-anchored)
+                bottom: (tooltipStyle.bottom ?? vs(40)) + CARD_EST_H + vs(8),
                 transform: [
                   { scale: unibotMascotScale },
                   { translateY: unibotMascotBounce },
@@ -916,7 +927,8 @@ export default function OnboardingGuide({
             ]}
           >
             <Image
-              source={uniBotImage}
+              source={mascotImage}
+              resizeMode="contain"
               style={[styles.bigMascotImg, { width: s(180), height: s(180) }]}
             />
           </Animated.View>
@@ -992,7 +1004,7 @@ export default function OnboardingGuide({
               </View>
 
               <View style={styles.chipRight}>
-                {/* Small UniBot mascot in card header */}
+                {/* Small mascot in card header — uses screen-specific image ── */}
                 {showSmallMascot && (
                   <Animated.View
                     style={[
@@ -1001,7 +1013,8 @@ export default function OnboardingGuide({
                     ]}
                   >
                     <Image
-                      source={uniBotImage}
+                      source={mascotImage}
+                      resizeMode="contain"
                       style={[
                         styles.smallMascotImg,
                         { width: s(100), height: s(100) },
@@ -1137,13 +1150,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   bigMascotImg: {
-    borderRadius: 999,
+    borderRadius: 0,
+    resizeMode: "contain",
   },
   smallMascotWrap: {
     marginRight: 4,
   },
   smallMascotImg: {
-    borderRadius: 999,
+    borderRadius: 0,
+    resizeMode: "contain",
   },
   chipRight: {
     flexDirection: "row",

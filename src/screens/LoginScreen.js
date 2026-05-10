@@ -456,7 +456,7 @@ export default function LoginScreen({ navigation }) {
                     autoCapitalize="none"
                     keyboardType="email-address"
                     editable={!isLocked}
-                    maxLength={25}
+                    maxLength={50}
                   />
                 </View>
                 {emailError ? (
