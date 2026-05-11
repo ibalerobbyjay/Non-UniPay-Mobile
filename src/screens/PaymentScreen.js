@@ -20,7 +20,7 @@ import {
 import { useTheme } from "../contexts/ThemeContext";
 import api from "../services/api";
 
-// ─── Loading Overlay (shared) ────────────────────────────────────────────────
+// ─── Loading Overlay ──────────────────────────────────────────────────────────
 function LoadingOverlay({ visible }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -97,8 +97,14 @@ export default function PaymentScreen({ navigation }) {
   const [feeBreakdown, setFeeBreakdown] = useState(null);
   const [selectedFees, setSelectedFees] = useState({});
   const [selectedTotal, setSelectedTotal] = useState(0);
+
+  // paidFeeIds: fees fully covered by a confirmed payment (amount paid >= current fee amount)
   const [paidFeeIds, setPaidFeeIds] = useState(new Set());
+  // partialFeeIds: fees with a confirmed payment but amount paid < current fee amount
+  const [partialFeeIds, setPartialFeeIds] = useState(new Map()); // feeId -> { paidAmount }
+  // pendingFeeIds: fees in a pending (unconfirmed) payment
   const [pendingFeeIds, setPendingFeeIds] = useState(new Set());
+
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -114,23 +120,88 @@ export default function PaymentScreen({ navigation }) {
         api.get("/fees/breakdown"),
         api.get("/payments/history"),
       ]);
+
       const breakdown = feesRes.data.breakdown;
       setFeeBreakdown(breakdown);
 
+      // Build a map of current fee amounts from the breakdown
+      const currentFeeAmounts = {};
+      [
+        ...(breakdown?.tuition?.fees || []),
+        ...(breakdown?.miscellaneous?.fees || []),
+        ...(breakdown?.exam?.fees || []),
+      ].forEach((fee) => {
+        currentFeeAmounts[fee.id] = parseFloat(fee.amount);
+      });
+
       const payments = historyRes.data.payments || [];
-      const paidFees = new Set();
+
+      // Accumulate how much has been paid per fee across all confirmed payments
+      const paidAmountPerFee = {}; // feeId -> total amount paid
       const pendingFees = new Set();
 
       payments.forEach((payment) => {
         if (payment.status === "paid" && payment.fees) {
-          payment.fees.forEach((fee) => paidFees.add(fee.id));
+          payment.fees.forEach((fee) => {
+            const prev = paidAmountPerFee[fee.id] || 0;
+            // fee.pivot_amount is what was paid for this fee in this payment
+            // fall back to fee.amount if pivot not available
+            const paidForThisFee = parseFloat(
+              fee.pivot_amount ?? fee.amount ?? 0,
+            );
+            paidAmountPerFee[fee.id] = prev + paidForThisFee;
+          });
         } else if (payment.status === "pending" && payment.fees) {
           payment.fees.forEach((fee) => pendingFees.add(fee.id));
         }
       });
 
-      setPaidFeeIds(paidFees);
+      // Now classify fees
+      const fullyPaid = new Set();
+      const partial = new Map(); // feeId -> { paidAmount, remaining }
+
+      Object.entries(paidAmountPerFee).forEach(([feeId, paidAmount]) => {
+        const id = parseInt(feeId, 10);
+        const currentAmount = currentFeeAmounts[id];
+
+        if (currentAmount === undefined) return; // fee no longer exists
+
+        if (paidAmount >= currentAmount) {
+          // Paid in full based on current fee amount
+          fullyPaid.add(id);
+        } else {
+          // Was paid but fee was edited higher — show remaining balance owed
+          partial.set(id, {
+            paidAmount,
+            remaining: currentAmount - paidAmount,
+          });
+        }
+      });
+
+      setPaidFeeIds(fullyPaid);
+      setPartialFeeIds(partial);
       setPendingFeeIds(pendingFees);
+
+      // Clear any selected fees that are now fully paid or pending
+      setSelectedFees((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        Object.keys(next).forEach((id) => {
+          const numId = parseInt(id, 10);
+          if (fullyPaid.has(numId) || pendingFees.has(numId)) {
+            delete next[id];
+            changed = true;
+          }
+        });
+        if (changed) {
+          const total = Object.values(next).reduce(
+            (sum, fee) => sum + fee.amount,
+            0,
+          );
+          setSelectedTotal(total);
+        }
+        return changed ? next : prev;
+      });
     } catch (error) {
       console.error("Error loading data:", error);
       Alert.alert("Error", "Failed to load fee information");
@@ -194,6 +265,8 @@ export default function PaymentScreen({ navigation }) {
       ...(feeBreakdown?.miscellaneous?.fees || []),
       ...(feeBreakdown?.exam?.fees || []),
     ];
+    // Selectable = not fully paid and not pending
+    // Partial fees ARE selectable (they still owe the remaining balance)
     return allFees.filter(
       (fee) => !paidFeeIds.has(fee.id) && !pendingFeeIds.has(fee.id),
     );
@@ -217,10 +290,13 @@ export default function PaymentScreen({ navigation }) {
     } else {
       const newSelected = {};
       selectableFees.forEach((fee) => {
-        newSelected[fee.id] = { amount: parseFloat(fee.amount) };
+        const partial = partialFeeIds.get(fee.id);
+        // If partially paid, only select the remaining balance
+        const amountDue = partial ? partial.remaining : parseFloat(fee.amount);
+        newSelected[fee.id] = { amount: amountDue };
       });
-      const total = selectableFees.reduce(
-        (sum, fee) => sum + parseFloat(fee.amount),
+      const total = Object.values(newSelected).reduce(
+        (sum, f) => sum + f.amount,
         0,
       );
       setSelectedFees(newSelected);
@@ -253,10 +329,11 @@ export default function PaymentScreen({ navigation }) {
         amount: selectedTotal,
         fee_ids: feeIds,
       });
+
       if (response.data.success) {
         const { payment_url } = response.data;
 
-        setPendingFeeIds((prev) => new Set([...prev, ...feeIds]));
+        setPendingFeeIds((prev) => new Set([...prev, ...feeIds.map(Number)]));
         setSelectedFees({});
         setSelectedTotal(0);
 
@@ -267,7 +344,7 @@ export default function PaymentScreen({ navigation }) {
           Alert.alert("Error", "Cannot open GCash payment page");
           setPendingFeeIds((prev) => {
             const newSet = new Set(prev);
-            feeIds.forEach((id) => newSet.delete(id));
+            feeIds.forEach((id) => newSet.delete(Number(id)));
             return newSet;
           });
         }
@@ -291,9 +368,11 @@ export default function PaymentScreen({ navigation }) {
     const isSelected = !!selectedFees[fee.id];
     const isPaid = paidFeeIds.has(fee.id);
     const isPending = pendingFeeIds.has(fee.id);
+    const partialInfo = partialFeeIds.get(fee.id); // { paidAmount, remaining }
     const activeCategoryColor = categoryColor || colors.brand;
     const isDisabled = loading || isPaid || isPending;
 
+    // ── Fully Paid ────────────────────────────────────────────────────────────
     if (isPaid) {
       return (
         <View
@@ -320,6 +399,7 @@ export default function PaymentScreen({ navigation }) {
       );
     }
 
+    // ── Pending ───────────────────────────────────────────────────────────────
     if (isPending) {
       return (
         <View
@@ -347,6 +427,47 @@ export default function PaymentScreen({ navigation }) {
       );
     }
 
+    // ── Partially Paid (fee was edited higher after payment) ──────────────────
+    if (partialInfo) {
+      const amountDue = partialInfo.remaining;
+      return (
+        <TouchableOpacity
+          key={fee.id}
+          style={[
+            styles.feeItem,
+            {
+              backgroundColor: colors.surface,
+              borderColor: isSelected ? "#e65100" : "#ff9800",
+              borderWidth: isSelected ? 1.5 : 1,
+              opacity: loading ? 0.6 : 1,
+            },
+          ]}
+          onPress={() => !loading && toggleFee(fee.id, amountDue)}
+          activeOpacity={0.7}
+          disabled={loading}
+        >
+          <View style={styles.feeInfo}>
+            <Text style={[styles.feeName, { color: colors.textPrimary }]}>
+              {fee.name}
+            </Text>
+            <Text style={[styles.feeAmount, { color: "#ff9800" }]}>
+              ₱{parseFloat(fee.amount).toLocaleString()} – Balance Due
+            </Text>
+            <Text style={[styles.feeSubAmount, { color: colors.textMuted }]}>
+              Paid ₱{partialInfo.paidAmount.toLocaleString()} · Still owe ₱
+              {amountDue.toLocaleString()}
+            </Text>
+          </View>
+          <Ionicons
+            name={isSelected ? "checkbox" : "square-outline"}
+            size={24}
+            color={isSelected ? "#e65100" : "#ff9800"}
+          />
+        </TouchableOpacity>
+      );
+    }
+
+    // ── Unpaid / Selectable ───────────────────────────────────────────────────
     return (
       <TouchableOpacity
         key={fee.id}
@@ -426,7 +547,7 @@ export default function PaymentScreen({ navigation }) {
               <Ionicons
                 name={isAllSelected ? "checkbox" : "square-outline"}
                 size={16}
-                color={isAllSelected ? "#fff" : "#fff"}
+                color="#fff"
               />
               <Text style={[styles.selectAllHeaderText, { color: "#fff" }]}>
                 {isAllSelected ? "Deselect All" : "Select All"}
@@ -509,6 +630,7 @@ export default function PaymentScreen({ navigation }) {
         <View style={{ height: 100 }} />
       </ScrollView>
 
+      {/* Footer */}
       <View
         style={[
           styles.footer,
@@ -683,6 +805,7 @@ const styles = StyleSheet.create({
   feeInfo: { flex: 1 },
   feeName: { fontSize: 15, fontWeight: "500", marginBottom: 4 },
   feeAmount: { fontSize: 16, fontWeight: "600" },
+  feeSubAmount: { fontSize: 12, marginTop: 2 },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
@@ -722,7 +845,6 @@ const styles = StyleSheet.create({
   },
   payButtonDisabled: { backgroundColor: "#94a3b8", opacity: 0.6 },
   payButtonText: { color: "#fff", fontSize: 18, fontWeight: "600" },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -780,8 +902,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-
-  // Loading overlay styles
   loadingOverlay: {
     flex: 1,
     justifyContent: "center",

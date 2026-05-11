@@ -164,11 +164,18 @@ export default function FeesScreen({ navigation }) {
       ...(breakdown?.miscellaneous?.fees || []),
       ...(breakdown?.exam?.fees || []),
     ].length > 0;
-  const totalDue = breakdown?.grand_total || 0;
-  const totalPaid = breakdown?.total_paid || 0;
-  const remainingBalance =
-    breakdown?.remaining_balance ?? Math.max(totalDue - totalPaid, 0);
 
+  // ── Always derive these from current backend values — never trust a cached
+  //    remaining_balance, because an admin may have edited fee amounts after
+  //    the student paid. grand_total always reflects current fee amounts.
+  const totalDue = parseFloat(breakdown?.grand_total || 0);
+  const totalPaid = parseFloat(breakdown?.total_paid || 0);
+
+  // Recompute locally so both the summary card and the grand total card
+  // always show the same number from the same source of truth.
+  const remainingBalance = Math.max(totalDue - totalPaid, 0);
+
+  // ── Summary card content ─────────────────────────────────────────────────
   let summaryLabel = "Remaining Balance";
   let summaryAmount = `₱${remainingBalance.toLocaleString()}`;
   let summaryIcon = "wallet-outline";
@@ -179,7 +186,9 @@ export default function FeesScreen({ navigation }) {
     summaryAmount = "Not Available";
     summaryIcon = "alert-circle-outline";
     summaryColor = "#f97316";
-  } else if (remainingBalance === 0) {
+  } else if (hasFees && totalDue > 0 && remainingBalance <= 0) {
+    // Only show "Fully Paid" when there are actual fees AND nothing is owed.
+    // This prevents a false "Fully Paid" when fees were raised after payment.
     summaryLabel = "Payment Status";
     summaryAmount = "Fully Paid";
     summaryIcon = "checkmark-circle";
@@ -213,7 +222,6 @@ export default function FeesScreen({ navigation }) {
         }
       >
         {/* ── Header ── */}
-
         <LinearGradient
           ref={feesHeaderRef}
           collapsable={false}
@@ -421,7 +429,7 @@ export default function FeesScreen({ navigation }) {
                   <Text
                     style={[styles.grandTotalFooterValue, { color: "#22c55e" }]}
                   >
-                    ₱{parseFloat(totalPaid).toLocaleString()}
+                    ₱{totalPaid.toLocaleString()}
                   </Text>
                 </View>
                 <View
@@ -535,7 +543,7 @@ function FeeSection({
           Subtotal
         </Text>
         <Text style={[styles.subtotalAmount, { color: colors.brand }]}>
-          ₱{subtotal?.toLocaleString() || "0"}
+          ₱{parseFloat(subtotal || 0).toLocaleString()}
         </Text>
       </View>
     </View>

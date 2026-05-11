@@ -301,18 +301,24 @@ export default function NotificationsScreen() {
         prev.map((n) => (n.id === item.id ? { ...n, is_read: true } : n)),
       );
     }
-    if (item.type === "payment_success" || item.type === "payment_failed")
+    if (item.type === "payment_success" || item.type === "payment_failed") {
       navigation.navigate("PaymentHistory");
+    } else if (item.type === "fee_updated") {
+      navigation.navigate("Payment"); // ← takes them straight to pay the difference
+    }
   };
 
   const getIconName = (type) => {
     if (type === "payment_success") return "checkmark-circle";
     if (type === "payment_failed") return "close-circle";
+    if (type === "fee_updated") return "pencil-outline"; // ← new
     return "information-circle";
   };
+
   const getIconColor = (type) => {
     if (type === "payment_success") return "#4caf50";
     if (type === "payment_failed") return "#f44336";
+    if (type === "fee_updated") return "#f4b400"; // ← new (amber)
     return "#f97316";
   };
   const formatDate = (d) => {
