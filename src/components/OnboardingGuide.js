@@ -32,7 +32,7 @@ const SCREEN_MASCOT = {
 };
 
 // bump version per-screen to allow re-triggering independently
-const storageKey = (uid, screen) => `onboarding_v6_${screen}_${uid}`;
+const storageKey = (uid, screen) => `onboarding_v7_${screen}_${uid}`;
 
 const TAB_COUNT = 5;
 
@@ -338,7 +338,7 @@ const PROFILE_STEPS = [
     icon: "camera-outline",
     iconColor: "#93c5fd",
     title: "Profile Header & Avatar",
-    body: "Tap your profile photo to change it . You can take a new photo or pick from your gallery.\n\nNote: Profile photos have a 7-day cooldown between updates. The  icon appears when locked.\n\nTap the ID card icon (top right) to view your Student ID.",
+    body: "Tap your profile photo to change it. You can take a new photo or pick from your gallery.\n\nNote: Profile photos have a 7-day cooldown between updates. The lock icon appears when locked.\n\nTap the ID card icon (top right) to view your Student ID.",
   },
   {
     id: "profile_info",
@@ -348,7 +348,17 @@ const PROFILE_STEPS = [
     icon: "create-outline",
     iconColor: "#fde68a",
     title: "Student Information",
-    body: "View your student details here:\n\n• Student number, email, course, year level, contact\n\nTap the ✏️ edit icon to update your info. Note: Edits have a 3-day cooldown. The  lock icon appears when you need to wait.",
+    body: "View and edit your student details:\n\n• Full name, email, course, year level, contact\n\nTap the ✏️ edit icon to update your info. Edits have a 3-day cooldown — the lock icon appears when you need to wait.",
+  },
+  {
+    id: "profile_announcements",
+    type: "element", // ← back to element
+    layoutKey: "profileAnnouncements", // ← its own ref
+    tabIndex: null,
+    icon: "megaphone-outline",
+    iconColor: "#f87171",
+    title: "Announcements",
+    body: "Stay updated with school news and announcements. A red badge shows how many unread announcements you have. Tap 'View Announcements' to read them all.",
   },
   {
     id: "profile_security",
@@ -368,7 +378,7 @@ const PROFILE_STEPS = [
     icon: "moon-outline",
     iconColor: "#c4b5fd",
     title: "Dark Mode Toggle",
-    body: "Toggle between dark  and light  themes to suit your preference. The change applies instantly across the entire app!",
+    body: "Toggle between dark and light themes to suit your preference. The change applies instantly across the entire app!",
   },
   {
     id: "profile_support",
@@ -398,7 +408,7 @@ const PROFILE_STEPS = [
     icon: "checkmark-circle-outline",
     iconColor: "#6ee7b7",
     title: "Profile Tour Done! ",
-    body: "You now know your way around the Profile screen. Remember: keep your contact info updated so you never miss important announcements. I'm UniBot — always here to help! ",
+    body: "You now know your way around the Profile screen. Keep your info updated and check Announcements regularly for school news. I'm UniBot — always here to help! ",
   },
 ];
 
@@ -433,6 +443,7 @@ const BORDER_RADIUS = {
   profileAppearance: 20,
   profileSupport: 20,
   profileLogout: 30,
+  profileAnnouncements: 20,
 };
 
 const STEP_VERTICAL_PADDING = {
@@ -451,11 +462,12 @@ const STEP_VERTICAL_PADDING = {
   clearanceDetails: 0,
   clearanceNote: 0,
   profileHeader: -30,
-  profileInfo: 0,
+  profileInfo: -100,
   profileSecurity: 0,
   profileAppearance: 0,
   profileSupport: 0,
   profileLogout: 0,
+  profileAnnouncements: 0,
 };
 
 const STEP_HORIZONTAL_PADDING = {
@@ -479,6 +491,7 @@ const STEP_HORIZONTAL_PADDING = {
   profileAppearance: 0,
   profileSupport: 0,
   profileLogout: 0,
+  profileAnnouncements: 0,
 };
 
 const STEP_VERTICAL_SHIFT = {
@@ -502,6 +515,7 @@ const STEP_VERTICAL_SHIFT = {
   profileAppearance: 0,
   profileSupport: 0,
   profileLogout: 0,
+  profileAnnouncements: 0,
 };
 
 export default function OnboardingGuide({
@@ -803,6 +817,10 @@ export default function OnboardingGuide({
   let arrowDir = null;
   let arrowLeft = null;
 
+  // Keys that sit too far down the page — always anchor card to fixed bottom
+  const FIXED_BOTTOM_KEYS = ["profileInfo", "profileSecurity", "profileLogout"];
+  const useFixedBottom = lk && FIXED_BOTTOM_KEYS.includes(lk);
+
   if (current.type === "tab" && rect) {
     tooltipStyle = { bottom: SH - TAB_BAR_TOP + GAP + 8 };
     arrowDir = "bottom";
@@ -813,27 +831,27 @@ export default function OnboardingGuide({
     tooltipStyle = { bottom: s(100) };
     arrowDir = null;
   } else if (current.type === "center" || !rect) {
-    // Always anchor card to bottom so mascot has full space above it
     tooltipStyle = { bottom: vs(40) };
+  } else if (useFixedBottom) {
+    // Fixed position — immune to scroll, always visible, no arrow needed
+    tooltipStyle = { bottom: TAB_BAR_HEIGHT + vs(16) };
+    arrowDir = null;
   } else {
     const below = SH - (rect.y + rect.height);
     const above = rect.y;
-    const SAFE_TOP = vs(52); // never let the card go above this (accounts for status bar)
+    const SAFE_TOP = vs(52);
     const arrowX = rect.x + rect.width / 2 - CARD_MARGIN - 12;
 
     if (below >= CARD_EST_H + GAP) {
-      // Enough space below — preferred position
       tooltipStyle = { top: rect.y + rect.height + GAP };
       arrowDir = "top";
       arrowLeft = arrowX;
     } else if (above >= CARD_EST_H + GAP) {
-      // Enough space above — clamp so card never goes off the top
       const rawTop = rect.y - CARD_EST_H - GAP;
       tooltipStyle = { top: Math.max(rawTop, SAFE_TOP) };
       arrowDir = "bottom";
       arrowLeft = arrowX;
     } else {
-      // Fallback — place below, clamped to safe top
       tooltipStyle = { top: Math.max(rect.y + rect.height + GAP, SAFE_TOP) };
       arrowDir = "top";
       arrowLeft = arrowX;

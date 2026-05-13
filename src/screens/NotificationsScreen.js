@@ -304,21 +304,26 @@ export default function NotificationsScreen() {
     if (item.type === "payment_success" || item.type === "payment_failed") {
       navigation.navigate("PaymentHistory");
     } else if (item.type === "fee_updated") {
-      navigation.navigate("Payment"); // ← takes them straight to pay the difference
+      navigation.navigate("Payment");
+    } else if (item.type === "announcement") {
+      // ← add this
+      navigation.navigate("Announcements");
     }
   };
 
   const getIconName = (type) => {
     if (type === "payment_success") return "checkmark-circle";
     if (type === "payment_failed") return "close-circle";
-    if (type === "fee_updated") return "pencil-outline"; // ← new
+    if (type === "fee_updated") return "pencil-outline";
+    if (type === "announcement") return "megaphone-outline"; // ← add
     return "information-circle";
   };
 
   const getIconColor = (type) => {
     if (type === "payment_success") return "#4caf50";
     if (type === "payment_failed") return "#f44336";
-    if (type === "fee_updated") return "#f4b400"; // ← new (amber)
+    if (type === "fee_updated") return "#f4b400";
+    if (type === "announcement") return "#0f3c91"; // ← add
     return "#f97316";
   };
   const formatDate = (d) => {

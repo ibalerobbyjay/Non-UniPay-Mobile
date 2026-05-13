@@ -1,22 +1,3 @@
-// HomeScreen.js — Updated with OnboardingGuide (screen="home")
-// Key change: pass screen="home" to OnboardingGuide (already working, just ensure refs are correct)
-// The OnboardingGuide import path and usage remains the same.
-// Replace your existing OnboardingGuide usage at the bottom of HomeScreen with:
-
-/*
-  <OnboardingGuide
-    screen="home"
-    userId={user?.id}
-    userName={user?.name}
-    getElementRect={getElementRect}
-    scrollToElement={scrollToElement}
-  />
-*/
-
-// The refs object and getElementRect function remain the same as your existing HomeScreen.js.
-// No other changes needed to HomeScreen.js — it already has all the correct refs.
-
-// ── FULL HomeScreen.js ────────────────────────────────────────────────────────
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -45,6 +26,201 @@ const CARD_WIDTH = width - 40;
 const CARD_INTERVAL = CARD_WIDTH + 16;
 const AUTO_SWIPE_DELAY = 5000;
 const POLL_INTERVAL = 60000;
+
+// Put this OUTSIDE the component, at module level
+const bannerShownThisSession = { value: false };
+
+function DueDateBanner({ announcement, remainingBalance, onNavigate }) {
+  const translateY = useRef(new Animated.Value(-120)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const [visible, setVisible] = useState(false);
+  const timerRef = useRef(null);
+  const hasShown = useRef(false);
+
+  useEffect(() => {
+    if (!announcement?.due_date) return;
+    if (remainingBalance <= 0) return;
+    if (hasShown.current) return;
+    if (bannerShownThisSession.value) return; // already shown this session
+    hasShown.current = true;
+    bannerShownThisSession.value = true;
+
+    translateY.setValue(-120);
+    opacity.setValue(0);
+    setVisible(true);
+
+    Animated.parallel([
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 12,
+      }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    timerRef.current = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: -120,
+          duration: 350,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 350,
+          useNativeDriver: true,
+        }),
+      ]).start(() => setVisible(false));
+      timerRef.current = null;
+    }, 4000);
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [announcement, remainingBalance]);
+
+  const dismiss = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: -120,
+        duration: 350,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setVisible(false));
+  }, [translateY, opacity]);
+
+  if (!visible || !announcement?.due_date) return null;
+
+  const due = new Date(announcement.due_date);
+  const now = new Date();
+  const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
+  const isOverdue = due < now;
+  const isDueSoon = !isOverdue && diffDays <= 7;
+
+  const bgColor = isOverdue ? "#7f1d1d" : isDueSoon ? "#78350f" : "#1e3a5f";
+  const accentColor = isOverdue ? "#ef4444" : isDueSoon ? "#f59e0b" : "#3b82f6";
+  const icon = isOverdue ? "alert-circle" : isDueSoon ? "warning" : "calendar";
+  const label = isOverdue
+    ? `Overdue · ${due.toLocaleDateString("en-PH", { month: "short", day: "numeric" })}`
+    : isDueSoon
+      ? `Due in ${diffDays} day${diffDays === 1 ? "" : "s"} · ${due.toLocaleDateString("en-PH", { month: "short", day: "numeric" })}`
+      : `Due ${due.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`;
+
+  return (
+    <Animated.View
+      style={[toastStyles.container, { transform: [{ translateY }], opacity }]}
+    >
+      <View style={[toastStyles.toast, { backgroundColor: bgColor }]}>
+        <View style={[toastStyles.accent, { backgroundColor: accentColor }]} />
+        <View
+          style={[
+            toastStyles.iconWrap,
+            { backgroundColor: accentColor + "33" },
+          ]}
+        >
+          <Ionicons name={icon} size={18} color={accentColor} />
+        </View>
+        <View style={toastStyles.textWrap}>
+          <Text style={toastStyles.title} numberOfLines={1}>
+            {announcement.title}
+          </Text>
+          <Text style={toastStyles.sub} numberOfLines={1}>
+            {label} · ₱{Number(remainingBalance).toLocaleString()} due
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={[toastStyles.payBtn, { borderColor: accentColor }]}
+          onPress={() => {
+            dismiss();
+            onNavigate();
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[toastStyles.payBtnText, { color: accentColor }]}>
+            Pay
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={dismiss}
+          style={toastStyles.closeBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="close" size={16} color="rgba(255,255,255,0.5)" />
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+}
+
+const toastStyles = StyleSheet.create({
+  container: {
+    position: "absolute",
+    top: 55,
+    left: 16,
+    right: 16,
+    zIndex: 999,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  toast: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    paddingVertical: 18, // ← was 10, now taller
+    paddingRight: 14,
+    paddingLeft: 0,
+    overflow: "hidden",
+    gap: 12,
+    minHeight: 80, // ← add this
+  },
+  accent: {
+    width: 5, // ← slightly thicker accent bar
+    alignSelf: "stretch",
+    borderRadius: 0,
+  },
+  iconWrap: {
+    width: 38, // ← slightly bigger icon circle
+    height: 38,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  textWrap: { flex: 1 },
+  title: { fontSize: 14, fontWeight: "700", color: "#fff", marginBottom: 3 }, // ← bigger title
+  sub: { fontSize: 12, color: "rgba(255,255,255,0.7)", lineHeight: 16 }, // ← bigger sub
+  payBtn: {
+    paddingVertical: 8, // ← taller Pay button
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  payBtnText: { fontSize: 12, fontWeight: "700" },
+  closeBtn: {
+    padding: 4,
+  },
+});
 
 // ─── Donut Ring ───────────────────────────────────────────────────────────
 function DonutRing({ percentage }) {
@@ -251,6 +427,10 @@ export default function HomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
+  // Increments every time the screen comes into focus — tells DueDateBanner
+  // to restart its animation cycle on every navigation visit.
+  const [focusTrigger, setFocusTrigger] = useState(0);
+  const [nearestDueAnnouncement, setNearestDueAnnouncement] = useState(null);
 
   // ── Refs for onboarding measurements ───────────────────────────────────
   const refs = {
@@ -298,21 +478,31 @@ export default function HomeScreen({ navigation }) {
     isFetching.current = true;
     try {
       const opts = signal ? { signal } : {};
-      const [profileRes, clearanceRes, breakdownRes, unreadRes, examPeriodRes] =
-        await Promise.all([
-          api.get("/student/profile", opts),
-          api.get("/clearance", opts),
-          api.get("/fees/breakdown", opts),
-          api.get("/notifications/unread-count", opts),
-          api.get("/exam-period/current", opts).catch(() => ({
-            data: { exam_period: null, semester: null, school_year: null },
-          })),
-        ]);
+      const [
+        profileRes,
+        clearanceRes,
+        breakdownRes,
+        unreadRes,
+        examPeriodRes,
+        nearestDueRes,
+      ] = await Promise.all([
+        api.get("/student/profile", opts),
+        api.get("/clearance", opts),
+        api.get("/fees/breakdown", opts),
+        api.get("/notifications/unread-count", opts),
+        api.get("/exam-period/current", opts).catch(() => ({
+          data: { exam_period: null, semester: null, school_year: null },
+        })),
+        api.get("/announcements/nearest-due", opts).catch(() => ({
+          data: { announcement: null },
+        })),
+      ]);
       setProfile(profileRes.data);
       setClearance(clearanceRes.data);
       setBreakdown(breakdownRes.data.breakdown);
       setUnreadCount(unreadRes.data.count);
       setExamPeriod(examPeriodRes.data);
+      setNearestDueAnnouncement(nearestDueRes.data.announcement);
     } catch (error) {
       if (
         error?.code === "ERR_CANCELED" ||
@@ -344,6 +534,8 @@ export default function HomeScreen({ navigation }) {
       const controller = new AbortController();
       loadData(controller.signal);
       startPolling();
+      // Increment focusTrigger so DueDateBanner re-animates on every visit.
+      setFocusTrigger((n) => n + 1);
       return () => {
         controller.abort();
         stopPolling();
@@ -504,10 +696,18 @@ export default function HomeScreen({ navigation }) {
   };
 
   return (
-    <>
+    // Wrap in a relative View so the DueDateBanner can overlay at zIndex 999
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* ── 5-second Due Date Reminder Banner ── */}
+      <DueDateBanner
+        announcement={nearestDueAnnouncement}
+        remainingBalance={remainingBalance}
+        onNavigate={() => navigation.navigate("Payment")}
+      />
+
       <ScrollView
         ref={scrollViewRef}
-        style={[styles.container, { backgroundColor: colors.background }]}
+        style={{ flex: 1 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -756,7 +956,7 @@ export default function HomeScreen({ navigation }) {
             }}
             onMomentumScrollEnd={handleCardScroll}
           >
-            {/* Card 1 */}
+            {/* Card 1 — Total Fees */}
             <LinearGradient
               colors={[colors.gradientStart, colors.gradientEnd]}
               start={{ x: 0, y: 0 }}
@@ -782,7 +982,7 @@ export default function HomeScreen({ navigation }) {
               <DonutRing percentage={paidPercentage} />
             </LinearGradient>
 
-            {/* Card 2 */}
+            {/* Card 2 — Total Paid */}
             <LinearGradient
               colors={[colors.gradientStart, colors.gradientEnd]}
               start={{ x: 0, y: 0 }}
@@ -803,7 +1003,7 @@ export default function HomeScreen({ navigation }) {
               <BreakdownBars breakdown={breakdown} />
             </LinearGradient>
 
-            {/* Card 3 */}
+            {/* Card 3 — Remaining */}
             <LinearGradient
               colors={
                 remainingBalance === 0
@@ -969,10 +1169,11 @@ export default function HomeScreen({ navigation }) {
         getElementRect={getElementRect}
         scrollToElement={scrollToElement}
       />
-    </>
+    </View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerGradient: {

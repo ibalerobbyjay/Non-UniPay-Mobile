@@ -15,6 +15,7 @@ import { AuthContext } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 
 // Screens
+import AnnouncementsScreen from "../screens/AnnouncementsScreen";
 import ChatbotScreen from "../screens/ChatbotScreen";
 import ClearanceScreen from "../screens/ClearanceScreen";
 import FeesScreen from "../screens/FeesScreen";
@@ -422,6 +423,8 @@ export default function AppNavigator() {
             component={NotificationsScreen}
             options={{ headerShown: false }}
           />
+
+          <Stack.Screen name="Announcements" component={AnnouncementsScreen} />
         </>
       ) : (
         <>

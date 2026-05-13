@@ -433,7 +433,7 @@ export default function ProfileScreen({ navigation }) {
 
   const { user, logout, updateUser } = useContext(AuthContext);
   const { isDark, toggleTheme, colors } = useTheme();
-
+  const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
   const [profile, setProfile] = useState(null);
   const [courses, setCourses] = useState([]);
   const [coursesLoading, setCoursesLoading] = useState(false);
@@ -482,6 +482,7 @@ export default function ProfileScreen({ navigation }) {
   // ── Onboarding refs ─────────────────────────────────────────────────────
   const refs = {
     profileHeader: useRef(null),
+    profileAnnouncements: useRef(null), // ← add this
     profileInfo: useRef(null),
     profileSecurity: useRef(null),
     profileAppearance: useRef(null),
@@ -631,6 +632,24 @@ export default function ProfileScreen({ navigation }) {
       setLoading(false);
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      // Load unread announcement count from notifications
+      api
+        .get("/notifications/unread-count")
+        .then((res) => {
+          // Count announcement-type notifications
+          api.get("/notifications").then((r) => {
+            const annCount = (r.data.notifications || []).filter(
+              (n) => n.type === "announcement" && !n.is_read,
+            ).length;
+            setUnreadAnnouncements(annCount);
+          });
+        })
+        .catch(() => {});
+    }, []),
+  );
 
   const pickImage = () => {
     if (pictureCooldown) {
@@ -1094,6 +1113,70 @@ export default function ProfileScreen({ navigation }) {
                 ))}
               </View>
             )}
+          </View>
+
+          <View ref={refs.profileAnnouncements} style={s.section}>
+            <View style={s.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <View
+                  style={[
+                    styles.sectionIcon,
+                    { backgroundColor: isDark ? "#1e293b" : "#eff6ff" },
+                  ]}
+                >
+                  <Ionicons
+                    name="megaphone-outline"
+                    size={18}
+                    color={colors.brand}
+                  />
+                </View>
+                <Text style={s.sectionTitle}>Announcements</Text>
+              </View>
+              {unreadAnnouncements > 0 && (
+                <View
+                  style={{
+                    backgroundColor: "#dc3545",
+                    borderRadius: 30,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    minWidth: 24,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}
+                  >
+                    {unreadAnnouncements > 99 ? "99+" : unreadAnnouncements}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={s.actionRow}
+              onPress={() => navigation.navigate("Announcements")}
+            >
+              <View style={styles.actionRowLeft}>
+                <Ionicons
+                  name="megaphone-outline"
+                  size={20}
+                  color={colors.brand}
+                />
+                <View>
+                  <Text style={s.actionRowText}>View Announcements</Text>
+                  <Text style={s.actionRowSub}>
+                    {unreadAnnouncements > 0
+                      ? `${unreadAnnouncements} unread announcement${unreadAnnouncements > 1 ? "s" : ""}`
+                      : "Stay up to date with school news"}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textMuted}
+              />
+            </TouchableOpacity>
           </View>
 
           {/* ── Account Security ── */}
